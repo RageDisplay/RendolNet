@@ -20,3 +20,4 @@ func (n *LinuxNetwork) Apply(context.Context, *netcfg.Config) error { return err
 func (n *LinuxNetwork) Links() ([]Link, error)                      { return nil, errNotLinux }
 func (n *LinuxNetwork) Watch(context.Context, func())               {}
 func (n *LinuxNetwork) DisableBootGuard() error                     { return nil }
+func (n *LinuxNetwork) Gateways() []Gateway                         { return nil }

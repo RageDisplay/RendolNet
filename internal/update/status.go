@@ -26,6 +26,7 @@ const (
 	ActionUpdate   Action = "update"
 	ActionRollback Action = "rollback"
 	ActionReboot   Action = "reboot"
+	ActionSSH      Action = "ssh"
 	ActionPoweroff Action = "poweroff"
 )
 
@@ -33,6 +34,7 @@ type Request struct {
 	ID      string    `json:"id"`
 	Action  Action    `json:"action"`
 	Version string    `json:"version,omitempty"`
+	SSHKey  string    `json:"ssh_key,omitempty"`
 	User    string    `json:"user"`
 	Created time.Time `json:"created"`
 }

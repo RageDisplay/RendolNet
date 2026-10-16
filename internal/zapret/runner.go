@@ -147,7 +147,7 @@ func (r *Runner) reconcile(ctx context.Context) error {
 		return fmt.Errorf("nftables: %w", err)
 	}
 	args := append([]string{fmt.Sprintf("--qnum=%d", QueueNum), fmt.Sprintf("--dpi-desync-fwmark=0x%x", DesyncMark)},
-		s.Expand(filepath.Join(r.BaseDir, "bin"), lists)...)
+		s.Expand(filepath.Join(r.BaseDir, "bin"), lists, z.Fooling)...)
 	// процесс живёт дольше вызова reconcile и останавливается в stop()
 	cmd := exec.CommandContext(context.Background(), r.Nfqws, args...)
 	cmd.Stdout = logWriter{r.Log}

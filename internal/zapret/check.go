@@ -28,17 +28,19 @@ func CheckAll(nfqws, baseDir string) error {
 		if !s.Compatible {
 			continue
 		}
-		args := append([]string{"--dry-run", fmt.Sprintf("--qnum=%d", QueueNum)},
-			s.Expand(filepath.Join(baseDir, "bin"), lists)...)
-		out, err := exec.CommandContext(context.Background(), nfqws, args...).CombinedOutput()
-		// --dry-run после разбора параметров пробует сбросить привилегии, а в
-		// песочнице docker build это запрещено. Параметры к этому моменту уже
-		// проверены — профили посчитаны.
-		if err != nil && strings.HasPrefix(lastLine(string(out)), "setpcap:") && strings.Contains(string(out), "desync profile") {
-			err = nil
-		}
-		if err != nil {
-			bad = append(bad, fmt.Sprintf("%s: %v: %s", s.Name, err, lastLine(string(out))))
+		for _, fooling := range Foolings {
+			args := append([]string{"--dry-run", fmt.Sprintf("--qnum=%d", QueueNum)},
+				s.Expand(filepath.Join(baseDir, "bin"), lists, fooling)...)
+			out, err := exec.CommandContext(context.Background(), nfqws, args...).CombinedOutput()
+			// --dry-run после разбора параметров пробует сбросить привилегии, а в
+			// песочнице docker build это запрещено. Параметры к этому моменту уже
+			// проверены — профили посчитаны.
+			if err != nil && strings.HasPrefix(lastLine(string(out)), "setpcap:") && strings.Contains(string(out), "desync profile") {
+				err = nil
+			}
+			if err != nil {
+				bad = append(bad, fmt.Sprintf("%s (fooling %q): %v: %s", s.Name, fooling, err, lastLine(string(out))))
+			}
 		}
 	}
 	if len(bad) > 0 {

@@ -51,7 +51,11 @@ export function TagInput(p: {
           value={text}
           placeholder={p.value.length === 0 ? p.placeholder : ""}
           onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          onBlur={() => {
+            // недописанное значение не должно теряться при уходе из поля
+            if (text.trim()) add(text);
+            setTimeout(() => setOpen(false), 120);
+          }}
           onChange={(e) => {
             setText(e.target.value);
             setOpen(true);

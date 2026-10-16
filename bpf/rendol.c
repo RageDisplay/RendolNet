@@ -794,8 +794,10 @@ int tc_ingress(struct __sk_buff *skb)
 
 	skb->mark |= RN_MARK;
 
-	/* 1. обратная трансляция SNAT */
-	if (p.v4 && ifc->addr4 && p.dst.w[3] == ifc->addr4) {
+	/* 1. обратная трансляция SNAT. Ответ может прийти не на тот порт, через
+	 * который ушёл запрос (WAN и управление в одной сети), поэтому ищем по
+	 * адресу назначения на любом интерфейсе. */
+	if (p.v4) {
 		struct snat_key sk = {
 			.nat_addr = p.dst.w[3], .remote_addr = p.src.w[3],
 			.nat_port = p.dport, .remote_port = p.sport, .proto = p.proto,

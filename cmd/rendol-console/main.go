@@ -136,7 +136,7 @@ var menu = []string{
 	"Сбросить пароль admin",
 	"Перезагрузить",
 	"Выключить",
-	"Командная оболочка",
+	"Командная оболочка (Alt+F2)",
 }
 
 func refresh() tea.Cmd {
@@ -186,8 +186,8 @@ func (m model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.mode = mConfirm
 				m.confirm = menu[m.cur]
 			case 4:
-				c := exec.CommandContext(context.Background(), "/bin/bash", "-l")
-				return m, tea.ExecProcess(c, func(error) tea.Msg { return tickMsg{} })
+				// оболочка живёт на tty2: запуск её поверх TUI на tty1 ненадёжен
+				_ = exec.CommandContext(context.Background(), "chvt", "2").Run()
 			}
 		}
 	case mConfirm:

@@ -122,7 +122,7 @@ func Plan(a Answers, d Disk) ([]Step, error) {
 	}
 	s = append(s,
 		Step{Kind: Cmd, Title: "Службы", Argv: chroot("systemctl", "enable", "systemd-networkd.service",
-			"nftables.service", "k3s.service", "rendol-updater.path", "rendol-console.service")},
+			"nftables.service", "k3s.service", "rendol-updater.path", "rendol-updater.timer", "rendol-console.service")},
 		Step{Kind: Cmd, Title: "Завершение", Argv: []string{"sync"}},
 		Step{Kind: Cmd, Title: "Размонтирование", Argv: []string{"umount", "-R", Target}, Optional: true},
 	)

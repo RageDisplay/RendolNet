@@ -46,6 +46,18 @@ func TestValidateCollectsAllErrors(t *testing.T) {
 	}
 }
 
+func TestInterfaceWithoutAddress(t *testing.T) {
+	c := seedConfig()
+	c.Interfaces[2].Addresses = nil
+	if err := Validate(&c); err != nil {
+		t.Fatalf("сохранённый конфиг без адреса должен подниматься агентом: %v", err)
+	}
+	err := ValidateCommit(&c)
+	if err == nil || !strings.Contains(err.Error(), "interfaces[2].addresses") {
+		t.Fatalf("LAN без адреса принят: %v", err)
+	}
+}
+
 func TestGroupCycle(t *testing.T) {
 	c := seedConfig()
 	c.Objects.Groups = []AddressGroup{

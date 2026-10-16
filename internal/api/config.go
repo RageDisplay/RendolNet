@@ -75,7 +75,7 @@ func (s *Server) handlePutCandidate(w http.ResponseWriter, r *http.Request) {
 	}
 	c, _ := s.st.Candidate(r.Context())
 	resp := map[string]any{"candidate": c}
-	if err := netcfg.Validate(&req.Body); err != nil {
+	if err := netcfg.ValidateCommit(&req.Body); err != nil {
 		resp["validation"] = err
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -164,7 +164,7 @@ func (s *Server) handleCommit(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := netcfg.Validate(&cand.Body); err != nil {
+	if err := netcfg.ValidateCommit(&cand.Body); err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, err)
 		return
 	}

@@ -111,6 +111,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /v1/traffic", need(V, s.handleTraffic))
 
 	mux.Handle("GET /v1/system", need(V, s.handleSystem))
+	mux.Handle("POST /v1/system/ssh", need(A, s.handleSSH))
 	mux.Handle("POST /v1/system/{action}", need(A, s.handlePower))
 	mux.Handle("GET /v1/audit", need(A, s.handleAudit))
 	mux.Handle("GET /v1/settings", need(V, s.handleSettings))

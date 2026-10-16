@@ -94,7 +94,7 @@ export interface Config {
   nat: { source: SNATRule[]; destination: DNATRule[] };
   protection: { blocklist?: string[]; syn_rate?: number; syn_burst?: number; log_default_deny: boolean };
   management: { interface: string; allow_from?: string[]; ports: number[] };
-  zapret: { enabled: boolean; strategy?: string; interface?: string; hosts?: string[]; ips?: string[] };
+  zapret: { enabled: boolean; strategy?: string; interface?: string; fooling?: string; hosts?: string[]; ips?: string[] };
 }
 
 export interface FieldError {
@@ -176,6 +176,7 @@ export interface AgentStatus {
   rollback?: { time: string; revision: number; reason: string };
   stats: DPStats;
   boot_guard: boolean;
+  gateways?: { interface: string; address: string; ok: boolean; rtt_ms?: number; error?: string; checked: string }[];
 }
 
 export interface HostInfo {

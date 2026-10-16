@@ -32,6 +32,17 @@ type Network interface {
 	Links() ([]Link, error)
 	Watch(ctx context.Context, onChange func())
 	DisableBootGuard() error
+	Gateways() []Gateway
+}
+
+// Gateway — шлюз маршрута по умолчанию и ответил ли он на ping.
+type Gateway struct {
+	Interface string    `json:"interface"`
+	Address   string    `json:"address"`
+	OK        bool      `json:"ok"`
+	RTTms     float64   `json:"rtt_ms,omitempty"`
+	Error     string    `json:"error,omitempty"`
+	Checked   time.Time `json:"checked"`
 }
 
 type Link struct {
@@ -74,6 +85,7 @@ type Agent struct {
 	lastErr   string
 	events    *eventRing
 	bootGuard bool
+	gateways  []Gateway
 }
 
 func New(log *slog.Logger, dp Dataplane, nw Network, stateDir, version string) *Agent {
@@ -103,6 +115,7 @@ func (a *Agent) Start(ctx context.Context) error {
 
 	go a.net.Watch(ctx, a.dp.RefreshAddresses)
 	go a.gcLoop(ctx)
+	go a.gatewayLoop(ctx)
 	go func() {
 		if err := a.dp.Events(a.events.add); err != nil {
 			a.log.Error("чтение событий dataplane", "err", err)
@@ -221,6 +234,7 @@ type Status struct {
 	Rollback   *Rollback       `json:"rollback,omitempty"`
 	Stats      dataplane.Stats `json:"stats"`
 	BootGuard  bool            `json:"boot_guard"`
+	Gateways   []Gateway       `json:"gateways,omitempty"`
 }
 
 func (a *Agent) Status() Status {
@@ -229,6 +243,7 @@ func (a *Agent) Status() Status {
 	s := Status{
 		Version: a.version, Generation: a.dp.Generation(), XDPMode: a.dp.XDPMode(),
 		LastError: a.lastErr, Rollback: a.rollback, Stats: a.dp.Stats(), BootGuard: a.bootGuard,
+		Gateways: a.gateways,
 	}
 	if a.active != nil {
 		s.Revision = a.active.Revision
@@ -245,6 +260,22 @@ func (a *Agent) Active() *Applied {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.active
+}
+
+func (a *Agent) gatewayLoop(ctx context.Context) {
+	t := time.NewTicker(20 * time.Second)
+	defer t.Stop()
+	for {
+		gws := a.net.Gateways()
+		a.mu.Lock()
+		a.gateways = gws
+		a.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }
 
 func (a *Agent) gcLoop(ctx context.Context) {

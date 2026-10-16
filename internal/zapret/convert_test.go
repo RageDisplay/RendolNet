@@ -30,10 +30,25 @@ func TestConvertFlowseal(t *testing.T) {
 	if strings.Count(strings.Join(s.Args, " "), "--new") != 6 {
 		t.Errorf("профилей должно остаться 7 (два игровых отброшены): %d разделителей", strings.Count(strings.Join(s.Args, " "), "--new"))
 	}
-	exp := strings.Join(s.Expand("/opt/zapret/bin", "/opt/zapret/lists"), " ")
+	exp := strings.Join(s.Expand("/opt/zapret/bin", "/opt/zapret/lists", ""), " ")
 	if !strings.Contains(exp, "--hostlist=/opt/zapret/lists/list-general.txt") ||
 		!strings.Contains(exp, "--dpi-desync-fake-quic=/opt/zapret/bin/quic_initial_www_google_com.bin") {
 		t.Fatalf("пути не подставлены: %s", exp)
+	}
+}
+
+func TestReplaceFooling(t *testing.T) {
+	for _, c := range []struct{ in, with, want string }{
+		{"--dpi-desync-fooling=ts", "", "--dpi-desync-fooling=ts"},
+		{"--dpi-desync-fooling=ts", "badseq", "--dpi-desync-fooling=badseq"},
+		{"--dpi-desync-fooling=ts,badseq", "badseq", "--dpi-desync-fooling=badseq"},
+		{"--dpi-desync-fooling=md5sig,ts", "badseq", "--dpi-desync-fooling=md5sig,badseq"},
+		{"--dpi-desync-fooling=badseq", "md5sig", "--dpi-desync-fooling=badseq"},
+		{"--dpi-desync-ts-increment=600000", "badseq", "--dpi-desync-ts-increment=600000"},
+	} {
+		if got := replaceFooling(c.in, c.with); got != c.want {
+			t.Errorf("%s/%s: %s, ждали %s", c.in, c.with, got, c.want)
+		}
 	}
 }
 

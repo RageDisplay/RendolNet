@@ -175,9 +175,12 @@ type Management struct {
 }
 
 type Zapret struct {
-	Enabled   bool     `json:"enabled"`
-	Strategy  string   `json:"strategy,omitempty"`
-	Interface string   `json:"interface,omitempty"`
-	Hosts     []string `json:"hosts,omitempty"`
-	IPs       []string `json:"ips,omitempty"`
+	Enabled   bool   `json:"enabled"`
+	Strategy  string `json:"strategy,omitempty"`
+	Interface string `json:"interface,omitempty"`
+	// Fooling заменяет fooling=ts в стратегии: ts работает, только если
+	// клиенты сами ставят TCP timestamps. Пусто — как в стратегии.
+	Fooling string   `json:"fooling,omitempty"`
+	Hosts   []string `json:"hosts,omitempty"`
+	IPs     []string `json:"ips,omitempty"`
 }

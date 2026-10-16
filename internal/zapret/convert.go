@@ -3,6 +3,7 @@ package zapret
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -161,14 +162,40 @@ func portStart(p string) int {
 	return n
 }
 
-// Expand подставляет каталоги в аргументы стратегии.
-func (s Strategy) Expand(bin, lists string) []string {
+// Foolings — допустимые замены fooling=ts, пусто — без замены.
+var Foolings = []string{"", "badseq", "md5sig"}
+
+// Expand подставляет каталоги в аргументы стратегии. fooling, если задан,
+// заменяет fooling=ts (см. replaceFooling).
+func (s Strategy) Expand(bin, lists, fooling string) []string {
 	out := make([]string, len(s.Args))
 	for i, a := range s.Args {
 		a = strings.ReplaceAll(a, BinDir, bin)
-		out[i] = strings.ReplaceAll(a, ListsDir, lists)
+		out[i] = replaceFooling(strings.ReplaceAll(a, ListsDir, lists), fooling)
 	}
 	return out
+}
+
+// replaceFooling: ts срабатывает, только если клиент сам ставит TCP
+// timestamps. Flowseal включает их на Windows через service.bat, а у клиентов
+// за роутером их обычно нет, и тогда поддельный ClientHello доходит до сервера
+// и рвёт TLS (ERR_SSL_PROTOCOL_ERROR). Какая замена пройдёт DPI, зависит от
+// провайдера, поэтому её выбирает пользователь.
+func replaceFooling(a, with string) string {
+	v, ok := strings.CutPrefix(a, "--dpi-desync-fooling=")
+	if !ok || with == "" {
+		return a
+	}
+	var out []string
+	for _, f := range strings.Split(v, ",") {
+		if f == "ts" {
+			f = with
+		}
+		if !slices.Contains(out, f) {
+			out = append(out, f)
+		}
+	}
+	return "--dpi-desync-fooling=" + strings.Join(out, ",")
 }
 
 func (s Strategy) String() string {

@@ -58,6 +58,13 @@ export function Overview() {
     <>
       {error && !data && <div className="note bad">{error}</div>}
       {data?.agent_error && <div className="note bad" style={{ marginBottom: 12 }}>{t("ov.agentdown")}: {data.agent_error}</div>}
+      {(data?.agent?.gateways ?? [])
+        .filter((g) => !g.ok && wanNames.includes(g.interface))
+        .map((g) => (
+          <div key={g.interface + g.address} className="note warn" style={{ marginBottom: 12 }}>
+            {t("ov.gwdown", { gw: g.address, iface: g.interface })}
+          </div>
+        ))}
 
       <div className="grid grid-4">
         <Stat label={t("ov.wan")} value={rxv} unit={rxu} foot={<>↑ {bps(wanTx)}</>} />

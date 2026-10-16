@@ -101,6 +101,17 @@ export function SystemPage() {
                 <dd className="mono">{a.xdp_mode}</dd>
                 <dt>{t("sys.bootguard")}</dt>
                 <dd>{a.boot_guard ? <span className="badge warn">{t("sys.bootguard.on")}</span> : <span className="badge ok">{t("sys.bootguard.off")}</span>}</dd>
+                <dt>{t("sys.gateways")}</dt>
+                <dd>
+                  {(a.gateways ?? []).length === 0
+                    ? "—"
+                    : a.gateways!.map((g) => (
+                        <div key={g.interface + g.address} className="mono">
+                          {g.address} <span className="faint">{g.interface}</span>{" "}
+                          {g.ok ? <span className="badge ok">{g.rtt_ms?.toFixed(1)} ms</span> : <span className="badge bad">{t("sys.gw.down")}</span>}
+                        </div>
+                      ))}
+                </dd>
                 <dt>NAT</dt>
                 <dd className="mono">{a.stats.nat_fail > 0 ? <span style={{ color: "var(--bad)" }}>{t("sys.natfail", { n: a.stats.nat_fail })}</span> : "ok"}</dd>
                 <dt>{t("sys.ringbuf")}</dt>
@@ -158,6 +169,8 @@ export function SystemPage() {
         </div>
       )}
 
+      {app.isAdmin && <SSHPanel />}
+
       {app.isAdmin && (
         <div className="section">
           <div className="section-head">
@@ -210,5 +223,38 @@ export function SystemPage() {
         />
       )}
     </>
+  );
+}
+
+function SSHPanel() {
+  const toast = useToast();
+  const [key, setKey] = useState("");
+  const send = async (k: string) => {
+    try {
+      await api.post("/v1/system/ssh", { key: k });
+      toast(k ? t("sys.ssh.on") : t("sys.ssh.off"));
+      setKey("");
+    } catch (e: any) {
+      toast(e.message, true);
+    }
+  };
+  return (
+    <div className="section">
+      <div className="section-head">
+        <span className="section-title">{t("sys.ssh")}</span>
+      </div>
+      <div className="panel panel-body stack">
+        <div className="muted">{t("sys.ssh.hint")}</div>
+        <textarea className="textarea mono" rows={2} value={key} placeholder="ssh-ed25519 AAAA… user@host" onChange={(e) => setKey(e.target.value)} />
+        <div className="row">
+          <button className="btn btn-primary" disabled={!key.trim()} onClick={() => send(key.trim())}>
+            {t("sys.ssh.enable")}
+          </button>
+          <button className="btn" onClick={() => send("")}>
+            {t("sys.ssh.disable")}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

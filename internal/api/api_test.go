@@ -55,6 +55,7 @@ func (stubNet) Links() ([]agent.Link, error) {
 	return []agent.Link{{Name: "eth1", Up: true, RxBytes: 1000, TxBytes: 2000}}, nil
 }
 func (stubNet) Watch(context.Context, func()) {}
+func (stubNet) Gateways() []agent.Gateway     { return nil }
 func (stubNet) DisableBootGuard() error       { return nil }
 
 type client struct {

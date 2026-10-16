@@ -1,0 +1,11 @@
+# Подстраховка к rendol-updater.path: если событие о request.json потерялось,
+# запрос всё равно подхватится. Без запроса служба сразу выходит.
+[Unit]
+Description=RendolNet host requests, periodic check
+
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=30s
+
+[Install]
+WantedBy=timers.target

@@ -75,8 +75,13 @@ func (r *dhcpRunner) run() {
 			if applied != nil && !applied.IP.Equal(addr.IP) {
 				_ = netlink.AddrDel(l, applied)
 			}
+			fresh := applied == nil || !applied.IP.Equal(addr.IP)
 			if err := netlink.AddrReplace(l, addr); err != nil {
 				r.log.Warn("dhcp: адрес", "err", err)
+			} else if fresh {
+				if err := announce(r.iface, addr.IP); err != nil {
+					r.log.Warn("dhcp: gratuitous ARP", "err", err)
+				}
 			}
 			applied = addr
 			if gws := ack.Router(); len(gws) > 0 {

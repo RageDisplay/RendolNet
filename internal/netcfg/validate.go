@@ -315,12 +315,35 @@ func Validate(c *Config) error {
 			v.add("zapret.interface", "нужен интерфейс с ролью wan")
 		}
 	}
+	switch c.Zapret.Fooling {
+	case "", "badseq", "md5sig":
+	default:
+		v.add("zapret.fooling", "допустимо: badseq, md5sig или пусто")
+	}
 	for i, ip := range c.Zapret.IPs {
 		if _, err := ParseAddrOrPrefix(ip); err != nil {
 			v.add(fmt.Sprintf("zapret.ips[%d]", i), "%v", err)
 		}
 	}
 
+	if len(v.errs) > 0 {
+		return &ValidationError{Errors: v.errs}
+	}
+	return nil
+}
+
+// ValidateCommit добавляет к Validate проверки, которые нужны при применении,
+// но не должны мешать агенту поднять уже сохранённый конфиг.
+func ValidateCommit(c *Config) error {
+	if err := Validate(c); err != nil {
+		return err
+	}
+	v := &validator{}
+	for i, it := range c.Interfaces {
+		if it.Enabled && it.Role != RoleMgmt && !it.DHCP && len(it.Addresses) == 0 {
+			v.add(fmt.Sprintf("interfaces[%d].addresses", i), "нет ни адреса, ни DHCP: интерфейс останется без адреса")
+		}
+	}
 	if len(v.errs) > 0 {
 		return &ValidationError{Errors: v.errs}
 	}

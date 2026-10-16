@@ -72,10 +72,16 @@ func (n *LinuxNetwork) Apply(ctx context.Context, c *netcfg.Config) error {
 
 func (n *LinuxNetwork) sysctls() {
 	set := map[string]string{
-		"net/ipv4/ip_forward":                       "1",
-		"net/ipv6/conf/all/forwarding":              "1",
-		"net/ipv4/conf/all/rp_filter":               "2",
-		"net/ipv4/conf/default/rp_filter":           "2",
+		"net/ipv4/ip_forward":             "1",
+		"net/ipv6/conf/all/forwarding":    "1",
+		"net/ipv4/conf/all/rp_filter":     "2",
+		"net/ipv4/conf/default/rp_filter": "2",
+		// каждый порт отвечает на ARP только за свои адреса: иначе при WAN и
+		// управлении в одной подсети клиент уходит на MAC WAN и упирается в политику
+		"net/ipv4/conf/all/arp_ignore":              "1",
+		"net/ipv4/conf/default/arp_ignore":          "1",
+		"net/ipv4/conf/all/arp_announce":            "2",
+		"net/ipv4/conf/default/arp_announce":        "2",
 		"net/ipv4/ip_local_port_range":              "32768\t40999",
 		"net/netfilter/nf_conntrack_tcp_be_liberal": "1",
 	}
@@ -186,6 +192,9 @@ func (n *LinuxNetwork) applyIface(it *netcfg.Interface) error {
 		}
 		if err := netlink.AddrAdd(l, addr); err != nil && !errors.Is(err, unix.EEXIST) {
 			return fmt.Errorf("%s: адрес %s: %w", it.Name, key, err)
+		}
+		if err := announce(it.Name, addr.IP); err != nil {
+			n.log.Warn("gratuitous ARP", "iface", it.Name, "err", err)
 		}
 	}
 	return nil

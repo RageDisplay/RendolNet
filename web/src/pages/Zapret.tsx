@@ -94,6 +94,13 @@ export function Zapret() {
                 ))}
               </select>
             </Field>
+            <Field label={t("zap.fooling")} hint={t("zap.fooling.hint")} error={fieldError(app.validation, "zapret.fooling")}>
+              <select className="select" value={z.fooling ?? ""} onChange={(e) => setZ({ ...z, fooling: e.target.value || undefined })}>
+                <option value="">{t("zap.fooling.keep")}</option>
+                <option>badseq</option>
+                <option>md5sig</option>
+              </select>
+            </Field>
             <Field label={t("zap.hosts")} hint={t("zap.hosts.hint")}>
               <textarea className="textarea mono" rows={5} value={hosts} onChange={(e) => setHosts(e.target.value)} placeholder="example.com" />
             </Field>

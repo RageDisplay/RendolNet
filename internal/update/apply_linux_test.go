@@ -78,6 +78,9 @@ func TestApplyOK(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(h.FSRoot, "usr/local/sbin/rendol-new")); string(b) != "bin 1.1.0" {
 		t.Fatalf("файл узла: %q", b)
 	}
+	if fi, _ := os.Stat(filepath.Join(h.FSRoot, "usr/local/sbin/rendol-new")); fi.Mode().Perm() != 0o755 {
+		t.Fatalf("бинарь узла без права запуска: %v", fi.Mode())
+	}
 	if h.InstalledVersion() != "1.1.0" || ReadStatus(h.Root).State != StateDone {
 		t.Fatalf("состояние: %s %+v", h.InstalledVersion(), ReadStatus(h.Root))
 	}

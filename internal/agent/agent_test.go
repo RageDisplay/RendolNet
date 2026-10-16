@@ -39,6 +39,8 @@ type fakeNet struct{ guardOff int }
 func (f *fakeNet) Apply(context.Context, *netcfg.Config) error { return nil }
 func (f *fakeNet) Links() ([]Link, error)                      { return nil, nil }
 func (f *fakeNet) Watch(context.Context, func())               {}
+func (f *fakeNet) Gateways() []Gateway                         { return nil }
+
 func (f *fakeNet) DisableBootGuard() error {
 	f.guardOff++
 	return nil

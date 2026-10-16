@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"rendolnet/internal/update"
@@ -118,6 +120,40 @@ func (s *Server) hostRequest(r *http.Request, act update.Action, version string)
 		return nil, err
 	}
 	return req, update.WriteJSON(filepath.Join(s.cfg.HostDir, update.RequestFile), req)
+}
+
+var sshKeyRe = regexp.MustCompile(`^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)) [A-Za-z0-9+/]{40,}={0,3}( [ -~]{0,100})?$`)
+
+// handleSSH включает вход по SSH под root по ключу или выключает его.
+// Пустой ключ — выключить.
+func (s *Server) handleSSH(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Key string `json:"key"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	req.Key = strings.TrimSpace(req.Key)
+	if req.Key != "" && !sshKeyRe.MatchString(req.Key) {
+		writeErr(w, http.StatusBadRequest, "нужен открытый ключ в одну строку: ssh-ed25519 AAAA… комментарий")
+		return
+	}
+	hr, err := s.hostRequest(r, update.ActionSSH, "")
+	if err != nil {
+		writeErr(w, http.StatusConflict, err.Error())
+		return
+	}
+	hr.SSHKey = req.Key
+	if err := update.WriteJSON(filepath.Join(s.cfg.HostDir, update.RequestFile), hr); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	action := "system.ssh.enable"
+	if req.Key == "" {
+		action = "system.ssh.disable"
+	}
+	s.audit(r, action, "", nil)
+	writeJSON(w, http.StatusAccepted, map[string]bool{"enabled": req.Key != ""})
 }
 
 func (s *Server) handlePower(w http.ResponseWriter, r *http.Request) {

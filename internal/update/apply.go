@@ -25,6 +25,7 @@ type Host struct {
 	FSRoot      string // корень файловой системы узла, "/" в работе
 	ManifestDir string // куда k3s смотрит за манифестами
 	K3s         string // путь к k3s
+	Systemctl   string // пусто — юниты не перечитываются (тесты)
 	HealthURL   string
 	Timeout     time.Duration
 	Log         func(string)
@@ -36,6 +37,7 @@ func DefaultHost() *Host {
 		FSRoot:      "/",
 		ManifestDir: "/var/lib/rancher/k3s/server/manifests",
 		K3s:         "/usr/local/bin/k3s",
+		Systemctl:   "systemctl",
 		HealthURL:   "https://127.0.0.1/healthz",
 		Timeout:     5 * time.Minute,
 	}
@@ -128,6 +130,7 @@ func (h *Host) Apply(ctx context.Context, req *Request) (err error) {
 	if err != nil {
 		return rollback("файлы узла: " + err.Error())
 	}
+	h.reloadUnits(installed, s)
 
 	s.set("манифесты")
 	if err := atomicCopy(filepath.Join(staged, "manifests", manifestName), filepath.Join(h.ManifestDir, manifestName)); err != nil {
@@ -143,6 +146,37 @@ func (h *Host) Apply(ctx context.Context, req *Request) (err error) {
 	_ = os.RemoveAll(staged)
 	finish(StateDone, "установлена версия "+m.Version)
 	return nil
+}
+
+// reloadUnits перечитывает systemd, если пакет принёс юниты, и включает
+// новые таймеры. Ошибки здесь не повод откатывать обновление.
+func (h *Host) reloadUnits(installed []string, s *step) {
+	if h.Systemctl == "" {
+		return
+	}
+	var timers []string
+	units := false
+	for _, rel := range installed {
+		if strings.HasPrefix(filepath.ToSlash(rel), "etc/systemd/") {
+			units = true
+			if strings.HasSuffix(rel, ".timer") {
+				timers = append(timers, filepath.Base(rel))
+			}
+		}
+	}
+	if !units {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if out, err := exec.CommandContext(ctx, h.Systemctl, "daemon-reload").CombinedOutput(); err != nil {
+		s.log("systemctl daemon-reload: " + strings.TrimSpace(string(out)))
+	}
+	for _, t := range timers {
+		if out, err := exec.CommandContext(ctx, h.Systemctl, "enable", "--now", t).CombinedOutput(); err != nil {
+			s.log("systemctl enable " + t + ": " + strings.TrimSpace(string(out)))
+		}
+	}
 }
 
 func (h *Host) InstalledVersion() string {
@@ -194,6 +228,12 @@ func (h *Host) installHostFiles(src, backup string) ([]string, error) {
 		}
 		if err := atomicCopy(p, dst); err != nil {
 			return err
+		}
+		// пакет мог быть собран на ФС без бита исполнения (Windows)
+		if s := filepath.ToSlash(rel); strings.HasPrefix(s, "usr/local/sbin/") || strings.HasPrefix(s, "usr/local/bin/") {
+			if err := os.Chmod(dst, 0o755); err != nil {
+				return err
+			}
 		}
 		done = append(done, rel)
 		return nil

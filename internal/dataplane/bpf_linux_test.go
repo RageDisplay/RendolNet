@@ -393,3 +393,20 @@ func TestDHCPOfferToUnassignedAddress(t *testing.T) {
 		t.Fatalf("широковещательный ответ DHCP отброшен: %d", ret)
 	}
 }
+
+// WAN и управление в одной сети: ответ на адрес WAN приходит через порт управления.
+func TestNATReplyOnOtherPort(t *testing.T) {
+	e := setupEnv(t, func(c *netcfg.Config) {
+		c.Rules[0].Services = append(c.Rules[0].Services, "udp/53")
+	})
+	q := testPkt{src: client, dst: internet, sport: 40500, dport: 53, proto: 17}
+	if ret, _ := e.in(q, "rn-lan"); ret != actOK {
+		t.Fatalf("DNS из LAN: %d", ret)
+	}
+	_, out := e.out(q, "rn-wan", true)
+	reply := testPkt{src: internet, dst: wanAddr, sport: 53, dport: out.sport, proto: 17}
+	ret, back := e.in(reply, "rn-mgmt")
+	if ret != actOK || back.dst != client || back.dport != 40500 {
+		t.Fatalf("ответ через порт управления: %d %s:%d", ret, back.dst, back.dport)
+	}
+}

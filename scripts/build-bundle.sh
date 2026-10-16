@@ -53,11 +53,20 @@ docker save "${IMAGES[@]}" | docker run -i --rm "$ALPINE_IMAGE" \
 
 bash scripts/render-manifests.sh "$VERSION" > "$WORK/manifests/rendolnet.yaml"
 
+# юниты узла едут вместе с бинарями: обновление их тоже доставляет
+mkdir -p "$WORK/host/etc/systemd/system"
+for u in rendol-updater.path rendol-updater.service rendol-updater.timer rendol-console.service          getty@tty2.service.d autovt@tty2.service.d; do
+  cp -r "iso/rootfs/etc/systemd/system/$u" "$WORK/host/etc/systemd/system/"
+done
+
 printf '{\n  "product": "rendolnet",\n  "version": "%s",\n  "created": "%s",\n  "k3s": "%s",\n  "images": [%s]\n}\n' \
   "$VERSION" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${K3S_VERSION:-}" \
   "$(printf '"%s",' "${IMAGES[@]}" | sed 's/,$//')" > "$WORK/manifest.json"
 
 ( cd "$WORK" && find . -type f | sed 's#^\./##' | sort | xargs sha256sum > ../SHA256SUMS && mv ../SHA256SUMS SHA256SUMS )
-tar -C "$WORK" -cf "$OUT/rendolnet-$VERSION.rnu" .
+# На Windows у файлов нет бита исполнения, поэтому права задаются явно:
+# бинари узла 0755, остальное 0644.
+tar -C "$WORK" --mode=u=rwX,go=rX --exclude=./host/usr/local/sbin -cf "$OUT/rendolnet-$VERSION.rnu" .
+tar -C "$WORK" --mode=0755 -rf "$OUT/rendolnet-$VERSION.rnu" ./host/usr/local/sbin
 ( cd "$OUT" && sha256sum "rendolnet-$VERSION.rnu" > "rendolnet-$VERSION.rnu.sha256" )
 ls -lh "$OUT/rendolnet-$VERSION.rnu"
