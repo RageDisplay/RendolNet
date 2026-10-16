@@ -24,13 +24,13 @@
 
 | Метод | Роль | Что делает |
 |---|---|---|
-| `GET /v1/config/candidate` | viewer | кандидат |
-| `PUT /v1/config/candidate` | operator | заменить кандидата: `{"body": {...}, "if_unmodified": "<updated_at>"}` |
-| `GET /v1/config/diff[?from=N&to=M]` | viewer | построчный diff; по умолчанию действующая ревизия → кандидат |
+| `GET /v1/config/candidate` | viewer | черновик |
+| `PUT /v1/config/candidate` | operator | заменить черновика: `{"body": {...}, "if_unmodified": "<updated_at>"}` |
+| `GET /v1/config/diff[?from=N&to=M]` | viewer | построчный diff; по умолчанию действующая ревизия → черновик |
 | `POST /v1/config/commit` | operator | `{"comment": "...", "confirm_seconds": 120}` |
 | `POST /v1/config/confirm` | operator | подтвердить ждущую ревизию |
 | `GET /v1/config/revisions` | viewer | история |
-| `POST /v1/config/revisions/{id}/load` | operator | ревизию в кандидат |
+| `POST /v1/config/revisions/{id}/load` | operator | ревизию в черновик |
 | `GET /v1/config/export[?revision=N]` | viewer | JSON для скачивания |
 | `GET /v1/dashboard` | viewer | всё для главной страницы |
 | `GET /v1/links` | viewer | интерфейсы узла со счётчиками |

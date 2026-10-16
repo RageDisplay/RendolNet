@@ -270,7 +270,7 @@ func (n *LinuxNetwork) syncDHCP(c *netcfg.Config) {
 
 // skipLink — служебные интерфейсы узла, которые не показываются в интерфейсе.
 func skipLink(name string) bool {
-	for _, p := range []string{"lo", "cni", "flannel", "veth", "kube-", "docker", "dummy", "tunl", "sit", "ip6tnl"} {
+	for _, p := range []string{"lo", "cni", "flannel", "veth", "kube-", "docker", "dummy", "tunl", "sit", "ip6tnl", "rnk3s"} {
 		if name == p || strings.HasPrefix(name, p) && p != "lo" {
 			return true
 		}

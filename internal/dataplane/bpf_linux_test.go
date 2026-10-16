@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/cilium/ebpf"
@@ -84,7 +85,7 @@ func setupEnv(t *testing.T, mutate func(*netcfg.Config)) *env {
 		mutate(&c)
 	}
 
-	dp, err := Open(slog.Default(), pin)
+	dp, err := Open(slog.Default(), filepath.Join(pin, "rendolnet"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,5 +378,18 @@ func TestXDPBlocklist(t *testing.T) {
 	frame = testPkt{src: internet, dst: wanAddr, sport: 1, dport: 80, proto: 6, flags: tcpSYN}.frame()
 	if ret, _ = e.dp.objs.XdpGuard.Run(&ebpf.RunOptions{Data: frame}); ret != 2 {
 		t.Fatalf("обычный адрес не прошёл XDP: %d", ret)
+	}
+}
+
+func TestDHCPOfferToUnassignedAddress(t *testing.T) {
+	e := setupEnv(t, nil)
+	offer := testPkt{src: netip.MustParseAddr("198.51.100.254"), dst: netip.MustParseAddr("198.51.100.77"), sport: 67, dport: 68, proto: 17}
+	if ret, _ := e.in(offer, "rn-wan"); ret != actOK {
+		t.Fatalf("предложение DHCP на ещё не назначенный адрес отброшено: %d", ret)
+	}
+	bcast := offer
+	bcast.dst = netip.MustParseAddr("255.255.255.255")
+	if ret, _ := e.in(bcast, "rn-wan"); ret != actOK {
+		t.Fatalf("широковещательный ответ DHCP отброшен: %d", ret)
 	}
 }

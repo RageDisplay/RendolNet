@@ -732,6 +732,17 @@ static __always_inline int is_nd(const struct pkt *p)
 	return p->proto == IPPROTO_ICMPV6 && p->icmp_type >= 133 && p->icmp_type <= 137;
 }
 
+/* Групповой и широковещательный трафик (mDNS, SSDP, IGMP, соседство IPv6)
+ * отбрасывается молча: иначе он забивает журнал отбоев по умолчанию. */
+static __always_inline int is_noise(const struct pkt *p)
+{
+	if (p->v4) {
+		__u32 d = bpf_ntohl(p->dst.w[3]);
+		return (d >> 28) == 0xe || d == 0xffffffff || (d & 0xff) == 0xff;
+	}
+	return (bpf_ntohl(p->dst.w[0]) >> 24) == 0xff;
+}
+
 static __always_inline struct ct_val *ct_find(const struct pkt *p, struct ct_key *k, int *reply)
 {
 	__u64 now = bpf_ktime_get_ns();
@@ -864,8 +875,9 @@ int tc_ingress(struct __sk_buff *skb)
 	__u16 from = ifc->zone;
 	__u16 to = egress_zone(skb, &p, &local);
 
-	/* ответ DHCP-сервера приходит раньше, чем узел знает свой адрес */
-	if (local && p.proto == IPPROTO_UDP &&
+	/* Ответ DHCP-сервера приходит на адрес, которого у узла ещё нет, и ядро
+	 * не считает его локальным, поэтому проверка без local. */
+	if (p.proto == IPPROTO_UDP &&
 	    ((p.sport == bpf_htons(67) && p.dport == bpf_htons(68)) ||
 	     (p.sport == bpf_htons(547) && p.dport == bpf_htons(546))))
 		return TC_ACT_OK;
@@ -885,7 +897,7 @@ int tc_ingress(struct __sk_buff *skb)
 
 	if (vd.action != ACT_ALLOW) {
 		stat_inc(ST_POLICY_DENY);
-		if ((vd.flags & RULE_F_LOG) || (vd.rule_id == RULE_ID_DEFAULT && cfg->log_default))
+		if ((vd.flags & RULE_F_LOG) || (vd.rule_id == RULE_ID_DEFAULT && cfg->log_default && !is_noise(&p)))
 			emit(EV_DENY, &p, skb, from, to, vd.rule_id, vd.action);
 		if (vd.action == ACT_REJECT && send_rst(skb, &p) == TC_ACT_REDIRECT)
 			return TC_ACT_REDIRECT;

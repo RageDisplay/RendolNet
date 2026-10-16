@@ -538,8 +538,8 @@ func (s *Store) TopDenied(ctx context.Context, since time.Time, limit int) (srcs
 	if err != nil {
 		return nil, nil, err
 	}
-	ports, err = q(`select case proto when 6 then 'tcp/' when 17 then 'udp/' when 1 then 'icmp' when 58 then 'icmpv6' else proto::text || '/' end
-		|| case when proto in (6,17) then dport::text else '' end, sum(count) c
+	ports, err = q(`select case proto when 6 then 'tcp/' || dport when 17 then 'udp/' || dport when 1 then 'icmp'
+		when 58 then 'icmpv6' when 2 then 'igmp' else 'ip/' || proto end, sum(count) c
 		from events where type='deny' and at >= $1 group by proto, dport order by c desc limit $2`)
 	return srcs, ports, err
 }
