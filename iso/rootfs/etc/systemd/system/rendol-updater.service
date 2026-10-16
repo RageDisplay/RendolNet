@@ -1,0 +1,7 @@
+[Unit]
+Description=RendolNet host request handler
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/rendol-updater run
+TimeoutStartSec=30min

@@ -1,0 +1,13 @@
+# Окружение для перегенерации eBPF: clang, заголовки ядра и libbpf.
+#   make bpf
+ARG GO_IMAGE=golang:1.26.8
+FROM ${GO_IMAGE}
+ARG APT_MIRROR=
+ARG APT_SECURITY_MIRROR=
+RUN S=/etc/apt/sources.list.d/debian.sources \
+ && sed -i -e "s#^URIs: http://deb.debian.org/debian\$#URIs: ${APT_MIRROR:-http://deb.debian.org/debian}#" \
+           -e "s#^URIs: http://deb.debian.org/debian-security\$#URIs: ${APT_SECURITY_MIRROR:-http://deb.debian.org/debian-security}#" $S \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends clang llvm libbpf-dev linux-libc-dev \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /src

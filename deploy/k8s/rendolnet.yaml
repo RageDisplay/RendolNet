@@ -1,0 +1,183 @@
+# Шаблон: ${VERSION} и ${IMAGES} подставляет scripts/render-manifests.sh.
+# Пароль базы лежит в Secret rendolnet-db, его создаёт установщик
+# (deploy/k8s/secret.example.yaml) и обновление не трогает.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rendolnet
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  namespace: rendolnet
+spec:
+  selector: { app: rendolnet-db }
+  ports:
+    - port: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: db
+  namespace: rendolnet
+spec:
+  serviceName: db
+  replicas: 1
+  selector:
+    matchLabels: { app: rendolnet-db }
+  template:
+    metadata:
+      labels: { app: rendolnet-db }
+    spec:
+      containers:
+        - name: postgres
+          image: ${IMAGES}postgres:17-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: POSTGRES_USER, value: rendolnet }
+            - { name: POSTGRES_DB, value: rendolnet }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: rendolnet-db, key: password } }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec: { command: [pg_isready, -U, rendolnet] }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+      volumes:
+        - name: data
+          hostPath: { path: /var/lib/rendolnet/pg, type: DirectoryOrCreate }
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: agent
+  namespace: rendolnet
+spec:
+  selector:
+    matchLabels: { app: rendolnet-agent }
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels: { app: rendolnet-agent }
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      priorityClassName: system-node-critical
+      tolerations:
+        - operator: Exists
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: agent
+          image: ${IMAGES}rendolnet/agent:${VERSION}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          env:
+            - { name: RN_SEED, valueFrom: { configMapKeyRef: { name: rendolnet-seed, key: seed, optional: true } } }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 256Mi }
+          volumeMounts:
+            - { name: bpf, mountPath: /sys/fs/bpf, mountPropagation: Bidirectional }
+            - { name: run, mountPath: /run/rendolnet }
+            - { name: state, mountPath: /var/lib/rendolnet/agent }
+      volumes:
+        - name: bpf
+          hostPath: { path: /sys/fs/bpf, type: DirectoryOrCreate }
+        - name: run
+          hostPath: { path: /run/rendolnet, type: DirectoryOrCreate }
+        - name: state
+          hostPath: { path: /var/lib/rendolnet/agent, type: DirectoryOrCreate }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: rendolnet
+spec:
+  replicas: 1
+  # hostNetwork и порт 443: два экземпляра одновременно не уживутся
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: rendolnet-api }
+  template:
+    metadata:
+      labels: { app: rendolnet-api }
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: api
+          image: ${IMAGES}rendolnet/api:${VERSION}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: RN_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: rendolnet-db, key: password } }
+            - { name: RN_DATABASE_URL, value: "postgres://rendolnet:$(RN_DB_PASSWORD)@db.rendolnet.svc.cluster.local:5432/rendolnet" }
+            - { name: RN_LISTEN, value: ":443" }
+          securityContext:
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+              add: [NET_BIND_SERVICE]
+          readinessProbe:
+            httpGet: { path: /healthz, port: 443, scheme: HTTPS }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 512Mi }
+          volumeMounts:
+            - { name: run, mountPath: /run/rendolnet }
+            - { name: data, mountPath: /var/lib/rendolnet }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: run
+          hostPath: { path: /run/rendolnet, type: DirectoryOrCreate }
+        - name: data
+          hostPath: { path: /var/lib/rendolnet, type: DirectoryOrCreate }
+        - name: tmp
+          emptyDir: {}
+---
+# Обход DPI. Без включения в конфиге под только следит за ним и ничего не делает.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: zapret
+  namespace: rendolnet
+spec:
+  selector:
+    matchLabels: { app: rendolnet-zapret }
+  template:
+    metadata:
+      labels: { app: rendolnet-zapret }
+    spec:
+      hostNetwork: true
+      tolerations:
+        - operator: Exists
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: zapret
+          image: ${IMAGES}rendolnet/zapret:${VERSION}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            capabilities:
+              add: [NET_ADMIN, NET_RAW]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 128Mi }
+          volumeMounts:
+            - { name: run, mountPath: /run/rendolnet }
+            - { name: work, mountPath: /run/zapret }
+      volumes:
+        - name: run
+          hostPath: { path: /run/rendolnet, type: DirectoryOrCreate }
+        - name: work
+          emptyDir: {}

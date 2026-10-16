@@ -1,0 +1,22 @@
+# Положите как autoinstall.yaml на том с меткой RNAUTO (FAT или ext4) и
+# выберите в меню загрузки пункт autoinstall.
+hostname: fw1
+timezone: Europe/Moscow
+disk: /dev/disk/by-id/ata-SAMSUNG_MZ7LH240_S1234567
+# confirm: S1234567    # серийный номер, если на диске есть данные
+
+mgmt: eno1
+mgmt_addr:
+  address: 10.0.0.10/24
+  gateway: 10.0.0.1
+  dns: [10.0.0.1]
+
+wan: eno2
+wan_addr:
+  dhcp: true
+
+lan: eno3
+lan_addr: 192.168.1.1/24
+
+# ssh_key: ssh-ed25519 AAAA... admin@laptop
+reboot: true

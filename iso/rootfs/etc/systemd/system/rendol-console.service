@@ -1,0 +1,20 @@
+[Unit]
+Description=RendolNet console on tty1
+After=systemd-user-sessions.service console-setup.service
+Wants=console-setup.service
+Conflicts=getty@tty1.service
+
+[Service]
+ExecStart=/usr/local/sbin/rendol-console
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+Restart=always
+RestartSec=2
+Environment=TERM=linux
+
+[Install]
+WantedBy=multi-user.target

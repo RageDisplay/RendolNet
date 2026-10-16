@@ -1,0 +1,16 @@
+/bin/
+/dist/
+/.tmp/
+*.exe
+*.test
+/coverage.out
+
+/web/node_modules/
+/web/dist/
+
+mirrors.local.env
+
+.idea/
+.vscode/
+.DS_Store
+/.tmp-iso-build.log

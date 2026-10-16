@@ -1,0 +1,12 @@
+node-name: rendolnet
+node-ip: 10.255.255.1
+advertise-address: 10.255.255.1
+flannel-iface: rnk3s0
+disable:
+  - traefik
+  - servicelb
+  - local-storage
+  - metrics-server
+disable-cloud-controller: true
+disable-helm-controller: true
+write-kubeconfig-mode: "0600"

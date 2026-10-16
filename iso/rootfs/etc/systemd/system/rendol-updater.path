@@ -1,0 +1,9 @@
+[Unit]
+Description=RendolNet host requests (update, reboot)
+
+[Path]
+PathExists=/var/lib/rendolnet/host/request.json
+MakeDirectory=yes
+
+[Install]
+WantedBy=multi-user.target

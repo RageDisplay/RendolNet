@@ -1,0 +1,22 @@
+# Стенд в minikube: пароль базы и стартовый конфиг на dummy-интерфейсах
+# wan0 и lan0, которые создаёт make minikube.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rendolnet
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rendolnet-db
+  namespace: rendolnet
+stringData:
+  password: minikube
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rendolnet-seed
+  namespace: rendolnet
+data:
+  seed: hostname=rendol-mk,wan=wan0,lan=lan0,lan_addr=192.168.1.1/24,wan_addr=203.0.113.2/24

@@ -1,0 +1,52 @@
+# Стенд для разработки интерфейса и API без ISO и k3s:
+#   docker compose -f deploy/dev/compose.yaml up --build
+#   https://localhost:8443  (admin / admin)
+
+name: rendolnet-dev
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: rendolnet
+      POSTGRES_PASSWORD: rendolnet
+      POSTGRES_DB: rendolnet
+    volumes:
+      - db:/var/lib/postgresql/data
+
+  agent:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+      target: agent-dev
+      args:
+        BINS: rendol-agent
+    privileged: true
+    environment:
+      RN_SEED: hostname=rendol-dev,mgmt=eth0,wan=wan0,lan=lan0,lan_addr=192.168.1.1/24,wan_addr=203.0.113.2/24
+      RN_LOG_LEVEL: debug
+    volumes:
+      - run:/run/rendolnet
+      - state:/var/lib/rendolnet
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+      target: api
+      args:
+        BINS: rendol-api
+    depends_on: [db, agent]
+    environment:
+      RN_DATABASE_URL: postgres://rendolnet:rendolnet@db:5432/rendolnet
+      RN_LISTEN: ":8443"
+    ports:
+      - "8443:8443"
+    volumes:
+      - run:/run/rendolnet
+      - state:/var/lib/rendolnet
+
+volumes:
+  db:
+  run:
+  state:

@@ -1,0 +1,60 @@
+# golangci-lint run --config build/golangci.yml
+
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - rowserrcheck
+    - errorlint
+    - copyloopvar
+    - misspell
+    - nilerr
+    - noctx
+    - unconvert
+    - usestdlibvars
+
+  settings:
+    errcheck:
+      check-blank: false
+      exclude-functions:
+        - (io.Closer).Close
+        - (*os.File).Close
+        - (net.Listener).Close
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Fprint
+    misspell:
+      locale: US
+    staticcheck:
+      checks:
+        - all
+        - -ST1000
+        - -ST1003
+        - -ST1020
+        - -ST1021
+
+  exclusions:
+    generated: lax
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - bodyclose
+          - noctx
+
+formatters:
+  enable:
+    - gofmt
+  settings:
+    gofmt:
+      simplify: true
