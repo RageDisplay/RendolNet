@@ -35,6 +35,7 @@
 /* бит отметки пакета, прошедшего ingress; остальные биты mark не трогаем —
  * ими пользуются kube-proxy и flannel */
 #define RN_MARK 0x10000000
+#define RN_PACKET_OTHERHOST 3 /* PACKET_OTHERHOST из linux/if_packet.h */
 
 #define EV_DENY        1
 #define EV_ALLOW       2

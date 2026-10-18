@@ -771,6 +771,11 @@ int tc_ingress(struct __sk_buff *skb)
 	/* тегированный кадр разберёт VLAN-интерфейс со своей зоной */
 	if (skb->vlan_present)
 		return TC_ACT_OK;
+	/* Кадр на чужой MAC: коммутатор разослал его всем портам, потому что не
+	 * знает, где получатель. Ядро выбросит его само, а журнал и счётчики
+	 * отбоев засорять незачем. */
+	if (skb->pkt_type == RN_PACKET_OTHERHOST)
+		return TC_ACT_OK;
 
 	struct pkt p;
 	if (parse(skb, &p) < 0)

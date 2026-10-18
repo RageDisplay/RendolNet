@@ -114,7 +114,9 @@ func mustDummy(t *testing.T, name, cidr string) {
 	if l, err := netlink.LinkByName(name); err == nil {
 		_ = netlink.LinkDel(l)
 	}
-	d := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Name: name}}
+	// MAC совпадает с адресом назначения тестовых кадров, иначе ядро
+	// помечает их как чужие (PACKET_OTHERHOST)
+	d := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Name: name, HardwareAddr: net.HardwareAddr{0x02, 0, 0, 0, 0, 0x01}}}
 	if err := netlink.LinkAdd(d); err != nil {
 		t.Fatalf("dummy %s: %v", name, err)
 	}
@@ -229,6 +231,24 @@ func TestPolicyDeny(t *testing.T) {
 	}
 	if s := e.dp.Stats(); s.PolicyDeny != uint64(len(cases)) {
 		t.Errorf("счётчик отбоев: %d", s.PolicyDeny)
+	}
+}
+
+// Кадр на чужой MAC пропускается в стек без политики и без записи в журнал.
+func TestOtherHostFrameIgnored(t *testing.T) {
+	e := setupEnv(t, nil)
+	p := testPkt{src: netip.MustParseAddr("192.168.50.238"), dst: netip.MustParseAddr("203.0.113.88"), sport: 53852, dport: 443, proto: 6, flags: tcpSYN}
+	f := p.frame()
+	f[5] = 0x99
+	if ret, _ := e.run(e.dp.objs.TcIngress, f, "rn-wan", 0); ret != actOK {
+		t.Fatalf("чужой кадр: %d", ret)
+	}
+	if s := e.dp.Stats(); s.PolicyDeny != 0 {
+		t.Fatalf("чужой кадр попал в отбои: %d", s.PolicyDeny)
+	}
+	// тот же пакет на наш MAC — обычный отбой по политике
+	if ret, _ := e.in(p, "rn-wan"); ret != actShot {
+		t.Fatalf("свой кадр: %d", ret)
 	}
 }
 
