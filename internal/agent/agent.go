@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"sync"
 	"time"
 
 	"rendolnet/internal/dataplane"
+	"rendolnet/internal/dhcpd"
 	"rendolnet/internal/netcfg"
 )
 
@@ -24,6 +26,7 @@ type Dataplane interface {
 	Events(func(dataplane.Event)) error
 	XDPMode() string
 	Generation() uint32
+	SetAddr(set uint32, pfx netip.Prefix, add bool) error
 }
 
 // Network — настройка интерфейсов, адресов и маршрутов в ядре.
@@ -33,6 +36,7 @@ type Network interface {
 	Watch(ctx context.Context, onChange func())
 	DisableBootGuard() error
 	Gateways() []Gateway
+	Leases() []dhcpd.Lease
 }
 
 // Gateway — шлюз маршрута по умолчанию и ответил ли он на ping.
@@ -86,12 +90,16 @@ type Agent struct {
 	events    *eventRing
 	bootGuard bool
 	gateways  []Gateway
+
+	fq     *fqdn
+	fqKick chan struct{}
 }
 
 func New(log *slog.Logger, dp Dataplane, nw Network, stateDir, version string) *Agent {
 	return &Agent{
 		log: log, dp: dp, net: nw, st: store{dir: stateDir}, version: version,
 		slots: map[string]uint32{}, events: newEventRing(20000), bootGuard: true,
+		fq: newFQDN(), fqKick: make(chan struct{}, 1),
 	}
 }
 
@@ -116,6 +124,7 @@ func (a *Agent) Start(ctx context.Context) error {
 	go a.net.Watch(ctx, a.dp.RefreshAddresses)
 	go a.gcLoop(ctx)
 	go a.gatewayLoop(ctx)
+	go a.fqdnLoop(ctx)
 	go func() {
 		if err := a.dp.Events(a.events.add); err != nil {
 			a.log.Error("чтение событий dataplane", "err", err)
@@ -132,8 +141,16 @@ func (a *Agent) apply(ctx context.Context, ap *Applied) error {
 	if err := a.net.Apply(ctx, &ap.Config); err != nil {
 		return err
 	}
-	if err := a.dp.Apply(plan); err != nil {
+	a.fq.mu.Lock()
+	a.fq.prepare(plan, time.Now())
+	err = a.dp.Apply(plan)
+	a.fq.mu.Unlock()
+	if err != nil {
 		return err
+	}
+	select {
+	case a.fqKick <- struct{}{}:
+	default:
 	}
 	a.slots = plan.RuleSlots
 	ap.Applied = time.Now()

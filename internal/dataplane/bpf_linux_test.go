@@ -38,9 +38,10 @@ var (
 )
 
 type env struct {
-	t   *testing.T
-	dp  *Dataplane
-	idx map[string]int
+	t    *testing.T
+	dp   *Dataplane
+	plan *Plan
+	idx  map[string]int
 }
 
 func setupEnv(t *testing.T, mutate func(*netcfg.Config)) *env {
@@ -68,8 +69,8 @@ func setupEnv(t *testing.T, mutate func(*netcfg.Config)) *env {
 	t.Cleanup(func() { _ = unix.Unmount(pin, 0) })
 
 	c := netcfg.Default(netcfg.Seed{
-		Hostname: "fw", Mgmt: "rn-mgmt", WAN: "rn-wan", LAN: "rn-lan",
-		LANAddr: "192.168.1.1/24", WANAddr: "203.0.113.2/24",
+		Hostname: "fw", Mgmt: "rn-mgmt", WAN: "rn-wan",
+		LANs: []netcfg.SeedLAN{{Name: "rn-lan", Addr: "192.168.1.1/24"}}, WANAddr: "203.0.113.2/24",
 	})
 	c.Rules = []netcfg.Rule{
 		{ID: "web", Name: "web", Enabled: true, From: []string{"lan"}, To: []string{"wan"}, Services: []string{"tcp/80,443", "icmp"}, Action: netcfg.ActionAllow},
@@ -100,7 +101,7 @@ func setupEnv(t *testing.T, mutate func(*netcfg.Config)) *env {
 	if err := dp.Apply(plan); err != nil {
 		t.Fatal(err)
 	}
-	e := &env{t: t, dp: dp, idx: map[string]int{}}
+	e := &env{t: t, dp: dp, plan: plan, idx: map[string]int{}}
 	for _, n := range []string{"rn-lan", "rn-wan", "rn-mgmt"} {
 		l, _ := netlink.LinkByName(n)
 		e.idx[n] = l.Attrs().Index
@@ -231,6 +232,32 @@ func TestPolicyDeny(t *testing.T) {
 	}
 }
 
+// Адреса домена добавляются в набор действующего банка на лету.
+func TestDomainSetAtRuntime(t *testing.T) {
+	e := setupEnv(t, func(c *netcfg.Config) {
+		c.Objects.Addresses = append(c.Objects.Addresses, netcfg.AddressObject{Name: "blocked", Domains: []string{"example.com"}})
+		c.Rules = append([]netcfg.Rule{{ID: "deny-dom", Name: "deny-dom", Enabled: true, From: []string{"lan"}, To: []string{"wan"},
+			Destination: []string{"blocked"}, Action: netcfg.ActionDeny}}, c.Rules...)
+	})
+	set := e.plan.DomainSets["example.com"][0]
+	syn := func(sport uint16) testPkt {
+		return testPkt{src: client, dst: internet, sport: sport, dport: 443, proto: 6, flags: tcpSYN}
+	}
+	if ret, _ := e.in(syn(41000), "rn-lan"); ret != actOK {
+		t.Fatalf("пустой набор домена уже режет: %d", ret)
+	}
+	if err := e.dp.SetAddr(set, netip.PrefixFrom(internet, 32), true); err != nil {
+		t.Fatal(err)
+	}
+	if ret, _ := e.in(syn(41001), "rn-lan"); ret != actShot {
+		t.Fatalf("адрес домена не режется: %d", ret)
+	}
+	_ = e.dp.SetAddr(set, netip.PrefixFrom(internet, 32), false)
+	if ret, _ := e.in(syn(41002), "rn-lan"); ret != actOK {
+		t.Fatalf("после удаления адрес всё ещё режется: %d", ret)
+	}
+}
+
 func TestLocalServices(t *testing.T) {
 	e := setupEnv(t, nil)
 
@@ -329,7 +356,7 @@ func TestPolicyChangeKillsSessions(t *testing.T) {
 	if ret, _ := e.in(syn, "rn-lan"); ret != actOK {
 		t.Fatal(ret)
 	}
-	c := netcfg.Default(netcfg.Seed{Hostname: "fw", Mgmt: "rn-mgmt", WAN: "rn-wan", LAN: "rn-lan", LANAddr: "192.168.1.1/24", WANAddr: "203.0.113.2/24"})
+	c := netcfg.Default(netcfg.Seed{Hostname: "fw", Mgmt: "rn-mgmt", WAN: "rn-wan", LANs: []netcfg.SeedLAN{{Name: "rn-lan", Addr: "192.168.1.1/24"}}, WANAddr: "203.0.113.2/24"})
 	c.Rules = []netcfg.Rule{{ID: "web", Name: "web", Enabled: true, From: []string{"lan"}, To: []string{"wan"}, Services: []string{"tcp/80"}, Action: netcfg.ActionAllow}}
 	plan, err := Compile(&c, nil)
 	if err != nil {
@@ -391,6 +418,22 @@ func TestDHCPOfferToUnassignedAddress(t *testing.T) {
 	bcast.dst = netip.MustParseAddr("255.255.255.255")
 	if ret, _ := e.in(bcast, "rn-wan"); ret != actOK {
 		t.Fatalf("широковещательный ответ DHCP отброшен: %d", ret)
+	}
+}
+
+func TestDHCPRequestToNode(t *testing.T) {
+	e := setupEnv(t, nil)
+	disc := testPkt{src: netip.MustParseAddr("0.0.0.0"), dst: netip.MustParseAddr("255.255.255.255"), sport: 68, dport: 67, proto: 17}
+	if ret, _ := e.in(disc, "rn-lan"); ret != actOK {
+		t.Fatalf("DHCPDISCOVER отброшен: %d", ret)
+	}
+	renew := testPkt{src: client, dst: netip.MustParseAddr("192.168.1.1"), sport: 68, dport: 67, proto: 17}
+	if ret, _ := e.in(renew, "rn-lan"); ret != actOK {
+		t.Fatalf("продление на адрес узла отброшено: %d", ret)
+	}
+	relay := testPkt{src: client, dst: internet, sport: 68, dport: 67, proto: 17}
+	if ret, _ := e.in(relay, "rn-lan"); ret == actOK {
+		t.Fatal("DHCP к чужому серверу прошёл мимо политики")
 	}
 }
 

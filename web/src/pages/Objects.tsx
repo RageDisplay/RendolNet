@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useApp } from "../lib/state";
-import type { AddressGroup, AddressObject, Config, Proto, Service } from "../lib/types";
+import { api } from "../lib/api";
+import { usePoll } from "../lib/router";
+import type { AddressGroup, AddressObject, Config, FQDNInfo, Proto, Service } from "../lib/types";
 import { addressSuggestions } from "../lib/suggest";
 import { t } from "../i18n";
 import { Chips, Confirm, Field, Modal, cx, useToast } from "../components/ui";
@@ -28,6 +30,13 @@ export function Objects() {
   const [grp, setGrp] = useState<{ o: AddressGroup; index: number | null } | null>(null);
   const [svc, setSvc] = useState<{ o: Service; index: number | null } | null>(null);
   const [del, setDel] = useState<{ tab: Tab; index: number; name: string } | null>(null);
+  const hasDomains = cfg.objects.addresses.some((o) => (o.domains ?? []).length > 0);
+  const fqdn = usePoll(() => (hasDomains ? api.get<FQDNInfo[]>("/v1/diag/fqdn") : Promise.resolve([] as FQDNInfo[])), 15000, [hasDomains]);
+  const learned = (domains?: string[]) => {
+    const all = new Set<string>();
+    for (const f of fqdn.data ?? []) if (domains?.includes(f.domain)) f.addresses.forEach((a) => all.add(a.address));
+    return [...all].sort();
+  };
 
   const save = async (fn: Parameters<typeof app.edit>[0], msg = t("common.saved")) => {
     try {
@@ -111,7 +120,15 @@ export function Objects() {
               cfg.objects.addresses.map((o, i) => (
                 <tr key={o.name} className="clickable" onClick={() => setAddr({ o: JSON.parse(JSON.stringify(o)), index: i })}>
                   <td className="mono" style={{ fontWeight: 500 }}>{o.name}</td>
-                  <td><Chips items={o.prefixes} mono /></td>
+                  <td>
+                    {o.prefixes.length > 0 && <Chips items={o.prefixes} mono />}
+                    {(o.domains ?? []).length > 0 && (
+                      <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                        <Chips items={o.domains} mono />
+                        <span className="faint" style={{ fontSize: 12 }}>{t("obj.learned", { n: learned(o.domains).length })}</span>
+                      </div>
+                    )}
+                  </td>
                   <td className="muted">{o.comment}</td>
                   <td className="num mono">{usage(cfg, o.name)}</td>
                   <td className="act"><DelBtn t="addresses" i={i} name={o.name} /></td>
@@ -152,7 +169,7 @@ export function Objects() {
           name={addr.o.name}
           comment={addr.o.comment}
           onClose={() => setAddr(null)}
-          valid={addr.o.prefixes.length > 0}
+          valid={addr.o.prefixes.length > 0 || (addr.o.domains ?? []).length > 0}
           onSave={async (name, comment) => {
             const o = { ...addr.o, name, comment };
             const old = addr.index !== null ? cfg.objects.addresses[addr.index].name : "";
@@ -166,6 +183,21 @@ export function Objects() {
           <Field label={t("obj.prefixes")} hint={t("obj.prefixes.hint")}>
             <TagInput value={addr.o.prefixes} onChange={(v) => setAddr({ ...addr, o: { ...addr.o, prefixes: v } })} placeholder="10.0.0.0/8" />
           </Field>
+          <Field label={t("obj.domains")} hint={t("obj.domains.hint")}>
+            <TagInput
+              value={addr.o.domains ?? []}
+              onChange={(v) => setAddr({ ...addr, o: { ...addr.o, domains: v.length ? v.map((d) => d.trim().toLowerCase()) : undefined } })}
+              placeholder="tiktok.com"
+              mono
+            />
+          </Field>
+          {(addr.o.domains ?? []).length > 0 && !cfg.dns_proxy?.enabled && <div className="note warn">{t("obj.domains.noproxy")}</div>}
+          {addr.index !== null && learned(cfg.objects.addresses[addr.index].domains).length > 0 && (
+            <details>
+              <summary className="muted">{t("obj.learned", { n: learned(cfg.objects.addresses[addr.index].domains).length })}</summary>
+              <div className="log" style={{ maxHeight: 200, marginTop: 6 }}>{learned(cfg.objects.addresses[addr.index].domains).join("\n")}</div>
+            </details>
+          )}
         </ObjModal>
       )}
       {grp && (

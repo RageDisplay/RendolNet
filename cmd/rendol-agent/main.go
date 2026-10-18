@@ -79,7 +79,9 @@ func main() {
 		}
 	}
 
-	a := agent.New(log, dp, agent.NewLinuxNetwork(log), stateDir, version)
+	nw := agent.NewLinuxNetwork(log, stateDir)
+	a := agent.New(log, dp, nw, stateDir, version)
+	nw.SetDNSObserver(a.ObserveDNS)
 	if err := a.Start(ctx); err != nil {
 		log.Error("запуск агента", "err", err)
 	}

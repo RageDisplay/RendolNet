@@ -119,6 +119,10 @@
 .input.invalid {
   border-color: var(--bad);
 }
+.input-sm {
+  height: 26px;
+  padding: 0 7px;
+}
 .input.mono {
   font-family: var(--font-mono);
   font-size: 12.5px;

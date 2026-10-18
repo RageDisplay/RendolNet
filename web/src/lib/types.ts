@@ -19,6 +19,26 @@ export interface Iface {
   addresses?: string[];
   mtu?: number;
   vlan?: { parent: string; id: number } | null;
+  dhcp_server?: DHCPServer | null;
+}
+
+export interface DHCPServer {
+  enabled: boolean;
+  range_start: string;
+  range_end: string;
+  lease_minutes?: number;
+  dns?: string[];
+  domain?: string;
+  static?: { mac: string; address: string; name?: string }[];
+}
+
+export interface Lease {
+  interface: string;
+  mac: string;
+  ip: string;
+  hostname?: string;
+  expires: string;
+  static?: boolean;
 }
 
 export interface Route {
@@ -32,7 +52,13 @@ export interface Route {
 export interface AddressObject {
   name: string;
   prefixes: string[];
+  domains?: string[];
   comment?: string;
+}
+
+export interface FQDNInfo {
+  domain: string;
+  addresses: { address: string; until: string }[];
 }
 export interface AddressGroup {
   name: string;
@@ -95,6 +121,7 @@ export interface Config {
   protection: { blocklist?: string[]; syn_rate?: number; syn_burst?: number; log_default_deny: boolean };
   management: { interface: string; allow_from?: string[]; ports: number[] };
   zapret: { enabled: boolean; strategy?: string; interface?: string; fooling?: string; hosts?: string[]; ips?: string[] };
+  dns_proxy?: { enabled: boolean };
 }
 
 export interface FieldError {

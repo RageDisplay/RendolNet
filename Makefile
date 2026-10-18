@@ -27,7 +27,7 @@ bpf: bpf-image
 
 # eBPF в настоящем ядре: нужен привилегированный контейнер
 test-bpf: bpf-image
-	$(DOCKER_RUN) --privileged -e RN_BPF_TEST=1 rendolnet-bpf go test -count=1 -v ./internal/dataplane/
+	$(DOCKER_RUN) --privileged -e RN_BPF_TEST=1 rendolnet-bpf go test -count=1 -v ./internal/dataplane/ ./internal/dhcpd/ ./internal/agent/
 
 test-api: bpf-image
 	-docker network create rn-test >/dev/null 2>&1

@@ -36,6 +36,7 @@ ISO на голое железо или виртуальную машину: о�
 - [install.md](docs/install.md) — ISO, требования, установка, автоустановка
 - [update.md](docs/update.md) — пакет обновления и как он ставится
 - [zapret.md](docs/zapret.md) — обход DPI
+- [dhcp-dns.md](docs/dhcp-dns.md) — DHCP-сервер, DNS-прокси, объекты по доменам
 - [api.md](docs/api.md) — HTTP API и `rendolctl`
 - [build.md](docs/build.md) — сборка, зеркала Nexus, CI
 - [development.md](docs/development.md) — стенды и тесты

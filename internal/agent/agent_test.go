@@ -2,12 +2,15 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"net/netip"
 	"sync"
 	"testing"
 	"time"
 
 	"rendolnet/internal/dataplane"
+	"rendolnet/internal/dhcpd"
 	"rendolnet/internal/netcfg"
 )
 
@@ -15,6 +18,18 @@ type fakeDP struct {
 	mu      sync.Mutex
 	applied []*dataplane.Plan
 	gen     uint32
+	setOps  []string
+}
+
+func (f *fakeDP) SetAddr(set uint32, p netip.Prefix, add bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	op := "-"
+	if add {
+		op = "+"
+	}
+	f.setOps = append(f.setOps, fmt.Sprintf("%s%d:%s", op, set, p))
+	return nil
 }
 
 func (f *fakeDP) Apply(p *dataplane.Plan) error {
@@ -40,6 +55,7 @@ func (f *fakeNet) Apply(context.Context, *netcfg.Config) error { return nil }
 func (f *fakeNet) Links() ([]Link, error)                      { return nil, nil }
 func (f *fakeNet) Watch(context.Context, func())               {}
 func (f *fakeNet) Gateways() []Gateway                         { return nil }
+func (f *fakeNet) Leases() []dhcpd.Lease                       { return nil }
 
 func (f *fakeNet) DisableBootGuard() error {
 	f.guardOff++
@@ -47,7 +63,7 @@ func (f *fakeNet) DisableBootGuard() error {
 }
 
 func cfg(rules int) netcfg.Config {
-	c := netcfg.Default(netcfg.Seed{Hostname: "fw", Mgmt: "eth0", WAN: "eth1", LAN: "eth2", LANAddr: "192.168.1.1/24", WANDHCP: true})
+	c := netcfg.Default(netcfg.Seed{Hostname: "fw", Mgmt: "eth0", WAN: "eth1", LANs: []netcfg.SeedLAN{{Name: "eth2", Addr: "192.168.1.1/24"}}, WANDHCP: true})
 	c.Rules = c.Rules[:rules]
 	return c
 }

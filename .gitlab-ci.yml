@@ -152,7 +152,7 @@ test:bpf:
           sha256sum internal/dataplane/ebpf/rendol_bpfel.go > /tmp/before
           go generate ./internal/dataplane/ebpf/
           sha256sum -c --quiet /tmp/before || { echo "bpf/rendol.c изменён, а обвязка не перегенерирована: make bpf"; exit 1; }
-          go test -count=1 -v ./internal/dataplane/ > /tmp/t.txt 2>&1 || { cat /tmp/t.txt; exit 1; }
+          go test -count=1 -v ./internal/dataplane/ ./internal/dhcpd/ ./internal/agent/ > /tmp/t.txt 2>&1 || { cat /tmp/t.txt; exit 1; }
           grep -E "^(---|ok)" /tmp/t.txt'
 
 test:lint:

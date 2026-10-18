@@ -81,11 +81,14 @@ type MgmtPlan struct {
 // Plan — результат компиляции, ещё не привязанный к индексам интерфейсов
 // и банку карт: это делает загрузчик.
 type Plan struct {
-	Zones      map[string]uint16
-	Ifaces     map[string]IfacePlan
-	Rules      []CompiledRule
-	Pairs      map[PairKey]Span
-	Sets       map[uint32][]netip.Prefix
+	Zones  map[string]uint16
+	Ifaces map[string]IfacePlan
+	Rules  []CompiledRule
+	Pairs  map[PairKey]Span
+	Sets   map[uint32][]netip.Prefix
+	// DomainSets — в какие наборы агент добавляет адреса, узнанные из DNS
+	// для домена.
+	DomainSets map[string][]uint32
 	SNAT       []SNATPlan
 	DNAT       []DNATPlan
 	Mgmt       MgmtPlan
@@ -119,6 +122,7 @@ func Compile(c *netcfg.Config, prevSlots map[string]uint32) (*Plan, error) {
 		Ifaces:     map[string]IfacePlan{},
 		Pairs:      map[PairKey]Span{},
 		Sets:       map[uint32][]netip.Prefix{},
+		DomainSets: map[string][]uint32{},
 		RuleSlots:  map[string]uint32{},
 		SYNRate:    uint32(c.Protection.SYNRate),
 		SYNBurst:   uint32(c.Protection.SYNBurst),
@@ -283,13 +287,17 @@ func (cp *compiler) set(refs []string) (uint32, error) {
 	if pfx == nil {
 		return 0, nil
 	}
-	key := fmt.Sprint(pfx)
+	doms := cp.res.Domains(refs)
+	key := fmt.Sprint(pfx, doms)
 	if id, ok := cp.setIDs[key]; ok {
 		return id, nil
 	}
 	id := uint32(len(cp.setIDs) + 1)
 	cp.setIDs[key] = id
 	cp.plan.Sets[id] = pfx
+	for _, d := range doms {
+		cp.plan.DomainSets[d] = append(cp.plan.DomainSets[d], id)
+	}
 	return id, nil
 }
 

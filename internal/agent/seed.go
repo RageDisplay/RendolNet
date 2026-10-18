@@ -9,7 +9,8 @@ import (
 )
 
 // ParseSeed разбирает строку вида "mgmt=eth0,wan=eth1,lan=eth2,lan_addr=192.168.1.1/24".
-// Так задаётся стартовый конфиг при установке без ISO и на стенде.
+// Так задаётся стартовый конфиг при установке без ISO и на стенде. lan можно
+// повторять, lan_addr относится к последнему lan.
 func ParseSeed(s string) (netcfg.Seed, error) {
 	seed := netcfg.Seed{Hostname: "rendolnet", WANDHCP: true}
 	for _, kv := range strings.Split(s, ",") {
@@ -25,9 +26,12 @@ func ParseSeed(s string) (netcfg.Seed, error) {
 		case "wan":
 			seed.WAN = v
 		case "lan":
-			seed.LAN = v
+			seed.LANs = append(seed.LANs, netcfg.SeedLAN{Name: v})
 		case "lan_addr":
-			seed.LANAddr = v
+			if len(seed.LANs) == 0 {
+				return seed, fmt.Errorf("agent: lan_addr без lan")
+			}
+			seed.LANs[len(seed.LANs)-1].Addr = v
 		case "wan_addr":
 			seed.WANAddr = v
 			seed.WANDHCP = false

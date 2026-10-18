@@ -27,12 +27,22 @@ type Answers struct {
 	MgmtAddr Addr   `yaml:"mgmt_addr"`
 	WAN      string `yaml:"wan"`
 	WANAddr  Addr   `yaml:"wan_addr"`
-	LAN      string `yaml:"lan"`
-	LANAddr  string `yaml:"lan_addr"`
+	LANs     []LAN  `yaml:"lans"`
+	// lan и lan_addr — короткая запись для одной LAN, Validate переносит её в LANs
+	LAN     string `yaml:"lan"`
+	LANAddr string `yaml:"lan_addr"`
 
 	SSHKey string `yaml:"ssh_key"`
 	Reboot bool   `yaml:"reboot"`
 }
+
+type LAN struct {
+	Iface string `yaml:"iface"`
+	Addr  string `yaml:"addr"` // CIDR, по умолчанию 192.168.N.1/24
+}
+
+// DefaultLANAddr: 192.168.1.1/24 для первой LAN, 192.168.2.1/24 для второй…
+func DefaultLANAddr(i int) string { return fmt.Sprintf("192.168.%d.1/24", i+1) }
 
 var (
 	hostnameRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
@@ -58,18 +68,30 @@ func (a *Answers) Validate() error {
 	if a.Mgmt == "" {
 		return errors.New("нужен интерфейс управления")
 	}
+	if a.LAN != "" {
+		a.LANs = append([]LAN{{Iface: a.LAN, Addr: a.LANAddr}}, a.LANs...)
+		a.LAN, a.LANAddr = "", ""
+	}
+	type port struct{ role, name string }
+	ports := []port{{"управления", a.Mgmt}, {"WAN", a.WAN}}
+	for i, l := range a.LANs {
+		ports = append(ports, port{fmt.Sprintf("LAN %d", i+1), l.Iface})
+	}
 	seen := map[string]string{}
-	for role, name := range map[string]string{"управления": a.Mgmt, "WAN": a.WAN, "LAN": a.LAN} {
-		if name == "" {
+	for _, p := range ports {
+		if p.name == "" {
+			if p.role != "WAN" {
+				return fmt.Errorf("не указан интерфейс %s", p.role)
+			}
 			continue
 		}
-		if !ifaceRe.MatchString(name) {
-			return fmt.Errorf("недопустимое имя интерфейса %q", name)
+		if !ifaceRe.MatchString(p.name) {
+			return fmt.Errorf("недопустимое имя интерфейса %q", p.name)
 		}
-		if other, ok := seen[name]; ok {
-			return fmt.Errorf("%s назначен и интерфейсом %s, и %s", name, other, role)
+		if other, ok := seen[p.name]; ok {
+			return fmt.Errorf("%s назначен и интерфейсом %s, и %s", p.name, other, p.role)
 		}
-		seen[name] = role
+		seen[p.name] = p.role
 	}
 	if err := a.MgmtAddr.validate("управления", true); err != nil {
 		return err
@@ -79,13 +101,22 @@ func (a *Answers) Validate() error {
 			return err
 		}
 	}
-	if a.LAN != "" {
-		if a.LANAddr == "" {
-			a.LANAddr = "192.168.1.1/24"
+	var nets []netip.Prefix
+	for i := range a.LANs {
+		l := &a.LANs[i]
+		if l.Addr == "" {
+			l.Addr = DefaultLANAddr(i)
 		}
-		if _, err := netip.ParsePrefix(a.LANAddr); err != nil {
-			return errors.New("адрес LAN указывается с маской, например 192.168.1.1/24")
+		p, err := netip.ParsePrefix(l.Addr)
+		if err != nil || !p.Addr().Is4() {
+			return fmt.Errorf("адрес LAN %s указывается с маской, например %s", l.Iface, DefaultLANAddr(i))
 		}
+		for j, o := range nets {
+			if o.Overlaps(p.Masked()) {
+				return fmt.Errorf("сети LAN %s и %s пересекаются", a.LANs[j].Iface, l.Iface)
+			}
+		}
+		nets = append(nets, p.Masked())
 	}
 	a.SSHKey = strings.TrimSpace(a.SSHKey)
 	if a.SSHKey != "" && !sshKeyRe.MatchString(a.SSHKey) {

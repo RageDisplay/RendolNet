@@ -16,6 +16,7 @@ import (
 
 	"rendolnet/internal/agent"
 	"rendolnet/internal/dataplane"
+	"rendolnet/internal/dhcpd"
 	"rendolnet/internal/netcfg"
 )
 
@@ -117,6 +118,17 @@ func (c *Client) Confirm(ctx context.Context, rev int64) error {
 func (c *Client) Links(ctx context.Context) ([]agent.Link, error) {
 	var l []agent.Link
 	return l, c.do(ctx, http.MethodGet, "/v1/links", nil, &l)
+}
+
+// Diag передаёт запрос диагностики агенту как есть.
+func (c *Client) Diag(ctx context.Context, method, name string, in any) (json.RawMessage, error) {
+	var out json.RawMessage
+	return out, c.do(ctx, method, "/v1/diag/"+name, in, &out)
+}
+
+func (c *Client) Leases(ctx context.Context) ([]dhcpd.Lease, error) {
+	var l []dhcpd.Lease
+	return l, c.do(ctx, http.MethodGet, "/v1/dhcp/leases", nil, &l)
 }
 
 func (c *Client) Sessions(ctx context.Context, limit int) ([]dataplane.Session, error) {

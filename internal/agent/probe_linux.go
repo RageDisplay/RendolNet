@@ -29,7 +29,7 @@ func announce(ifname string, ip net.IP) error {
 	if err != nil {
 		return err
 	}
-	defer unix.Close(fd)
+	defer func() { _ = unix.Close(fd) }()
 
 	pkt := make([]byte, 28)
 	binary.BigEndian.PutUint16(pkt[0:], 1) // ethernet
@@ -93,38 +93,84 @@ func (n *LinuxNetwork) Gateways() []Gateway {
 var errTimeout = errors.New("нет ответа")
 
 func ping(ifname string, dst net.IP, timeout time.Duration) (time.Duration, error) {
-	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_RAW, unix.IPPROTO_ICMP)
+	p, err := newPinger(ifname)
 	if err != nil {
 		return 0, err
 	}
-	defer unix.Close(fd)
-	if err := unix.SetsockoptString(fd, unix.SOL_SOCKET, unix.SO_BINDTODEVICE, ifname); err != nil {
+	defer p.close()
+	r, err := p.echo(dst, 1, 64, timeout)
+	if err != nil {
 		return 0, err
 	}
-	tv := unix.NsecToTimeval(timeout.Nanoseconds())
-	_ = unix.SetsockoptTimeval(fd, unix.SOL_SOCKET, unix.SO_RCVTIMEO, &tv)
+	if !r.reached {
+		return 0, fmt.Errorf("%s: %w", dst, errTimeout)
+	}
+	return r.rtt, nil
+}
 
-	id, seq := uint16(rand.Uint32()), uint16(1)
-	req := []byte{8, 0, 0, 0, byte(id >> 8), byte(id), byte(seq >> 8), byte(seq), 'r', 'n'}
+// pinger — сырой ICMP-сокет. Сырой сокет получает все ICMP узла, поэтому
+// свои ответы отбираются по идентификатору и номеру.
+type pinger struct {
+	fd int
+	id uint16
+}
+
+func newPinger(ifname string) (*pinger, error) {
+	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_RAW, unix.IPPROTO_ICMP)
+	if err != nil {
+		return nil, err
+	}
+	if ifname != "" {
+		if err := unix.SetsockoptString(fd, unix.SOL_SOCKET, unix.SO_BINDTODEVICE, ifname); err != nil {
+			_ = unix.Close(fd)
+			return nil, err
+		}
+	}
+	return &pinger{fd: fd, id: uint16(rand.Uint32())}, nil
+}
+
+func (p *pinger) close() { _ = unix.Close(p.fd) }
+
+type echoResult struct {
+	from    net.IP // кто ответил: адресат или маршрутизатор по пути
+	rtt     time.Duration
+	reached bool // ответил сам адресат
+}
+
+// echo шлёт один запрос с заданным TTL. Ответом считается echo reply от
+// адресата или time exceeded / unreachable, внутри которого наш запрос.
+// Нет ответа за timeout — результат без from и без ошибки.
+func (p *pinger) echo(dst net.IP, seq uint16, ttl int, timeout time.Duration) (echoResult, error) {
+	if err := unix.SetsockoptInt(p.fd, unix.IPPROTO_IP, unix.IP_TTL, ttl); err != nil {
+		return echoResult{}, err
+	}
+	req := []byte{8, 0, 0, 0, byte(p.id >> 8), byte(p.id), byte(seq >> 8), byte(seq), 'r', 'n'}
 	binary.BigEndian.PutUint16(req[2:], icmpChecksum(req))
-
 	var to unix.SockaddrInet4
 	copy(to.Addr[:], dst.To4())
 	start := time.Now()
-	if err := unix.Sendto(fd, req, 0, &to); err != nil {
-		return 0, err
+	if err := unix.Sendto(p.fd, req, 0, &to); err != nil {
+		return echoResult{}, err
+	}
+	mine := func(m []byte) bool {
+		return len(m) >= 8 && m[0] == 8 && binary.BigEndian.Uint16(m[4:]) == p.id && binary.BigEndian.Uint16(m[6:]) == seq
 	}
 	buf := make([]byte, 1500)
 	deadline := start.Add(timeout)
-	for time.Now().Before(deadline) {
-		n, from, err := unix.Recvfrom(fd, buf, 0)
-		if err != nil {
-			if errors.Is(err, unix.EAGAIN) {
-				break
-			}
-			return 0, err
+	for {
+		left := time.Until(deadline)
+		if left <= 0 {
+			return echoResult{}, nil
 		}
-		// сырой сокет отдаёт пакет вместе с IP-заголовком и все ICMP подряд
+		tv := unix.NsecToTimeval(left.Nanoseconds())
+		_ = unix.SetsockoptTimeval(p.fd, unix.SOL_SOCKET, unix.SO_RCVTIMEO, &tv)
+		n, from, err := unix.Recvfrom(p.fd, buf, 0)
+		if err != nil {
+			if errors.Is(err, unix.EAGAIN) || errors.Is(err, unix.EINTR) {
+				continue
+			}
+			return echoResult{}, err
+		}
 		if n < 20 {
 			continue
 		}
@@ -133,14 +179,27 @@ func ping(ifname string, dst net.IP, timeout time.Duration) (time.Duration, erro
 			continue
 		}
 		m := buf[hl:n]
-		if sa, ok := from.(*unix.SockaddrInet4); !ok || !net.IP(sa.Addr[:]).Equal(dst.To4()) {
+		sa, ok := from.(*unix.SockaddrInet4)
+		if !ok {
 			continue
 		}
-		if m[0] == 0 && binary.BigEndian.Uint16(m[4:]) == id && binary.BigEndian.Uint16(m[6:]) == seq {
-			return time.Since(start), nil
+		src := net.IP(append([]byte(nil), sa.Addr[:]...))
+		switch m[0] {
+		case 0: // echo reply
+			if src.Equal(dst.To4()) && binary.BigEndian.Uint16(m[4:]) == p.id && binary.BigEndian.Uint16(m[6:]) == seq {
+				return echoResult{from: src, rtt: time.Since(start), reached: true}, nil
+			}
+		case 3, 11: // unreachable, time exceeded: внутри заголовок нашего запроса
+			in := m[8:]
+			if len(in) < 20 {
+				continue
+			}
+			ihl := int(in[0]&0x0f) * 4
+			if len(in) >= ihl+8 && net.IP(in[16:20]).Equal(dst.To4()) && mine(in[ihl:]) {
+				return echoResult{from: src, rtt: time.Since(start), reached: m[0] == 3 && src.Equal(dst.To4())}, nil
+			}
 		}
 	}
-	return 0, fmt.Errorf("%s: %w", dst, errTimeout)
 }
 
 func icmpChecksum(b []byte) uint16 {

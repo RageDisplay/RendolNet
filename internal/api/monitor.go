@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 	"strconv"
@@ -9,6 +11,7 @@ import (
 	"time"
 
 	"rendolnet/internal/agent"
+	"rendolnet/internal/agentclient"
 	"rendolnet/internal/store"
 )
 
@@ -194,6 +197,38 @@ func (s *Server) handleLinks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, links)
+}
+
+func (s *Server) handleDiag(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	var in any
+	if r.Method == http.MethodPost {
+		var body json.RawMessage
+		if !readJSON(w, r, &body) {
+			return
+		}
+		in = body
+	}
+	out, err := s.agent.Diag(r.Context(), r.Method, name, in)
+	var ae *agentclient.Error
+	switch {
+	case errors.As(err, &ae) && ae.Status < 500:
+		writeErr(w, ae.Status, ae.Message)
+	case err != nil:
+		writeErr(w, http.StatusBadGateway, err.Error())
+	default:
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(out)
+	}
+}
+
+func (s *Server) handleLeases(w http.ResponseWriter, r *http.Request) {
+	l, err := s.agent.Leases(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, l)
 }
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {

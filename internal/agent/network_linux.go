@@ -37,10 +37,12 @@ type LinuxNetwork struct {
 
 	mu   sync.Mutex
 	dhcp map[string]*dhcpRunner
+	svc  *services
 }
 
-func NewLinuxNetwork(log *slog.Logger) *LinuxNetwork {
-	return &LinuxNetwork{log: log, dhcp: map[string]*dhcpRunner{}}
+// stateDir — где хранить аренды DHCP-сервера между перезапусками.
+func NewLinuxNetwork(log *slog.Logger, stateDir string) *LinuxNetwork {
+	return &LinuxNetwork{log: log, dhcp: map[string]*dhcpRunner{}, svc: newServices(log, stateDir)}
 }
 
 func (n *LinuxNetwork) Apply(ctx context.Context, c *netcfg.Config) error {
@@ -67,6 +69,7 @@ func (n *LinuxNetwork) Apply(ctx context.Context, c *netcfg.Config) error {
 	if err := n.syncRoutes(c); err != nil {
 		errs = append(errs, err)
 	}
+	n.svc.sync(c)
 	return errors.Join(errs...)
 }
 

@@ -9,8 +9,8 @@ import (
 
 func seedConfig() Config {
 	return Default(Seed{
-		Hostname: "fw1", Mgmt: "eth0", WAN: "eth1", LAN: "eth2",
-		LANAddr: "192.168.1.1/24", WANDHCP: true,
+		Hostname: "fw1", Mgmt: "eth0", WAN: "eth1",
+		LANs: []SeedLAN{{Name: "eth2", Addr: "192.168.1.1/24"}}, WANDHCP: true,
 	})
 }
 
@@ -18,6 +18,59 @@ func TestDefaultIsValid(t *testing.T) {
 	c := seedConfig()
 	if err := Validate(&c); err != nil {
 		t.Fatalf("конфиг по умолчанию не проходит проверку: %v", err)
+	}
+	if c := Default(Seed{Hostname: "fw1", Mgmt: "eth0"}); Validate(&c) != nil {
+		t.Fatalf("конфиг без WAN и LAN не проходит проверку: %v", Validate(&c))
+	}
+}
+
+func TestDHCPServerValidation(t *testing.T) {
+	c := seedConfig()
+	lan := &c.Interfaces[2]
+	if d := lan.DHCPServer; d == nil || d.RangeStart != "192.168.1.100" || d.RangeEnd != "192.168.1.199" || !c.DNSProxy.Enabled {
+		t.Fatalf("сервер по умолчанию: %+v", d)
+	}
+	for _, bad := range []func(d *DHCPServer){
+		func(d *DHCPServer) { d.RangeEnd = "192.168.2.10" },
+		func(d *DHCPServer) { d.RangeStart, d.RangeEnd = "192.168.1.150", "192.168.1.120" },
+		func(d *DHCPServer) { d.RangeEnd = "192.168.1.255" },
+		func(d *DHCPServer) { d.Static = []DHCPStatic{{MAC: "zz", Address: "192.168.1.5"}} },
+		func(d *DHCPServer) { d.Static = []DHCPStatic{{MAC: "02:00:00:00:00:01", Address: "192.168.1.1"}} },
+		func(d *DHCPServer) { d.LeaseMinutes = 1 },
+	} {
+		c := seedConfig()
+		bad(c.Interfaces[2].DHCPServer)
+		if Validate(&c) == nil {
+			t.Errorf("принято: %+v", c.Interfaces[2].DHCPServer)
+		}
+	}
+	c = seedConfig()
+	c.Interfaces[1].DHCPServer = &DHCPServer{Enabled: true, RangeStart: "1.1.1.1", RangeEnd: "1.1.1.2"}
+	if Validate(&c) == nil {
+		t.Error("DHCP-сервер на WAN принят")
+	}
+	for in, want := range map[string]string{"192.168.1.1/24": "192.168.1.100-192.168.1.199", "10.0.5.150/16": "10.0.5.10-10.0.5.99", "10.0.0.1/28": "-"} {
+		s, e, _ := DefaultDHCPRange(in)
+		if s+"-"+e != want {
+			t.Errorf("%s: %s-%s", in, s, e)
+		}
+	}
+}
+
+func TestDefaultSeveralLANs(t *testing.T) {
+	c := Default(Seed{Hostname: "fw1", Mgmt: "eth0", WAN: "eth1", WANDHCP: true, LANs: []SeedLAN{
+		{Name: "eth2", Addr: "192.168.1.1/24"}, {Name: "eth3", Addr: "192.168.2.1/24"},
+	}})
+	if err := Validate(&c); err != nil {
+		t.Fatal(err)
+	}
+	if c.Interfaces[3].Zone != "lan2" {
+		t.Fatalf("вторая LAN в зоне %q", c.Interfaces[3].Zone)
+	}
+	for _, r := range c.Rules[:2] {
+		if strings.Join(r.From, ",") != "lan,lan2" {
+			t.Errorf("%s: from %v", r.ID, r.From)
+		}
 	}
 }
 

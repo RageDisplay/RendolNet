@@ -18,6 +18,14 @@ export const IconPort = base(
     <path d="M5 13v-3h6v3M6 4V2.5h4V4" />
   </>,
 );
+export const IconLease = base(
+  <>
+    <rect x="2.5" y="2.5" width="11" height="4" rx="1" />
+    <rect x="2.5" y="9.5" width="11" height="4" rx="1" />
+    <path d="M5 4.5h.01M5 11.5h.01M8 4.5h3M8 11.5h3" />
+  </>,
+);
+export const IconPulse = base(<path d="M1.5 8.5h3l1.5-4 3 8 1.5-4h4" />);
 export const IconRoute = base(
   <>
     <circle cx="3.5" cy="12.5" r="1.5" />

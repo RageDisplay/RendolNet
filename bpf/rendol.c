@@ -884,6 +884,13 @@ int tc_ingress(struct __sk_buff *skb)
 	     (p.sport == bpf_htons(547) && p.dport == bpf_htons(546))))
 		return TC_ACT_OK;
 
+	/* Запрос клиента к DHCP-серверу узла: от 0.0.0.0 на широковещательный
+	 * адрес, при продлении — на адрес узла. Транзитом к чужому серверу
+	 * такой пакет мимо политики не пройдёт. */
+	if (p.proto == IPPROTO_UDP && p.v4 && p.sport == bpf_htons(68) && p.dport == bpf_htons(67) &&
+	    (local || p.dst.w[3] == 0xffffffff))
+		return TC_ACT_OK;
+
 	struct verdict vd;
 	if (local && mgmt_allowed(cfg, skb, &p)) {
 		vd.action = ACT_ALLOW;

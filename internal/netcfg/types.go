@@ -17,6 +17,7 @@ type Config struct {
 	Protection Protection  `json:"protection"`
 	Management Management  `json:"management"`
 	Zapret     Zapret      `json:"zapret"`
+	DNSProxy   DNSProxy    `json:"dns_proxy"`
 }
 
 type System struct {
@@ -50,6 +51,35 @@ type Interface struct {
 	Addresses   []string `json:"addresses,omitempty"` // CIDR: 192.0.2.1/24
 	MTU         int      `json:"mtu,omitempty"`
 	VLAN        *VLAN    `json:"vlan,omitempty"`
+
+	DHCPServer *DHCPServer `json:"dhcp_server,omitempty"`
+}
+
+// DHCPServer раздаёт адреса в сети интерфейса. Шлюзом клиентам выдаётся
+// адрес узла на этом интерфейсе.
+type DHCPServer struct {
+	Enabled      bool   `json:"enabled"`
+	RangeStart   string `json:"range_start"`
+	RangeEnd     string `json:"range_end"`
+	LeaseMinutes int    `json:"lease_minutes,omitempty"` // 0 — 12 часов
+	// Пусто — адрес узла, если включён DNS-прокси, иначе system.dns.
+	DNS    []string     `json:"dns,omitempty"`
+	Domain string       `json:"domain,omitempty"`
+	Static []DHCPStatic `json:"static,omitempty"`
+}
+
+type DHCPStatic struct {
+	MAC     string `json:"mac"`
+	Address string `json:"address"`
+	Name    string `json:"name,omitempty"`
+}
+
+const DefaultLeaseMinutes = 720
+
+// DNSProxy принимает запросы на адресах узла в LAN и пересылает их серверам
+// из system.dns.
+type DNSProxy struct {
+	Enabled bool `json:"enabled"`
 }
 
 type VLAN struct {
@@ -71,9 +101,13 @@ type Objects struct {
 	Services  []Service       `json:"services"`
 }
 
+// Domains — адреса, которые DNS-прокси узла узнаёт из ответов на эти имена
+// и их поддомены. Клиенты должны спрашивать DNS у узла, иначе адреса не
+// попадут в объект.
 type AddressObject struct {
 	Name     string   `json:"name"`
 	Prefixes []string `json:"prefixes"`
+	Domains  []string `json:"domains,omitempty"`
 	Comment  string   `json:"comment,omitempty"`
 }
 

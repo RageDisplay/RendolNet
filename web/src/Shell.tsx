@@ -13,6 +13,8 @@ import { Nat } from "./pages/Nat";
 import { Objects } from "./pages/Objects";
 import { Protection } from "./pages/Protection";
 import { Zapret } from "./pages/Zapret";
+import { DhcpDns } from "./pages/DhcpDns";
+import { Diag } from "./pages/Diag";
 import { Sessions } from "./pages/Sessions";
 import { Events } from "./pages/Events";
 import { ConfigPage } from "./pages/Config";
@@ -39,7 +41,9 @@ const pages: Page[] = [
   { path: "/protection", title: "nav.protection", icon: I.IconGuard, group: "nav.g.policy", view: Protection },
   { path: "/interfaces", title: "nav.interfaces", icon: I.IconPort, group: "nav.g.network", view: Interfaces },
   { path: "/routes", title: "nav.routes", icon: I.IconRoute, group: "nav.g.network", view: Routes },
+  { path: "/dhcp", title: "nav.dhcp", icon: I.IconLease, group: "nav.g.network", view: DhcpDns },
   { path: "/zapret", title: "nav.zapret", icon: I.IconTunnel, group: "nav.g.network", view: Zapret },
+  { path: "/diag", title: "nav.diag", icon: I.IconPulse, group: "nav.g.network", view: Diag },
   { path: "/config", title: "nav.config", icon: I.IconConfig, group: "nav.g.system", view: ConfigPage },
   { path: "/update", title: "nav.update", icon: I.IconUpdate, group: "nav.g.system", view: Update },
   { path: "/users", title: "nav.users", icon: I.IconUsers, group: "nav.g.system", view: Users },

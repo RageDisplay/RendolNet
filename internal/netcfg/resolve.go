@@ -9,6 +9,7 @@ import (
 
 type Resolver struct {
 	addrs    map[string][]string
+	domains  map[string][]string
 	groups   map[string][]string
 	services map[string]Service
 }
@@ -16,11 +17,15 @@ type Resolver struct {
 func NewResolver(c *Config) *Resolver {
 	r := &Resolver{
 		addrs:    map[string][]string{},
+		domains:  map[string][]string{},
 		groups:   map[string][]string{},
 		services: map[string]Service{},
 	}
 	for _, a := range c.Objects.Addresses {
 		r.addrs[a.Name] = a.Prefixes
+		for _, d := range a.Domains {
+			r.domains[a.Name] = append(r.domains[a.Name], NormalizeDomain(d))
+		}
 	}
 	for _, g := range c.Objects.Groups {
 		r.groups[g.Name] = g.Members
@@ -87,6 +92,44 @@ func (r *Resolver) expand(ref string, set map[netip.Prefix]struct{}, seen map[st
 	}
 	set[p] = struct{}{}
 	return nil
+}
+
+// NormalizeDomain: «*.Example.com.» и «example.com» — одно и то же,
+// поддомены входят всегда.
+func NormalizeDomain(d string) string {
+	d = strings.ToLower(strings.TrimSpace(d))
+	d = strings.TrimPrefix(d, "*.")
+	return strings.TrimSuffix(d, ".")
+}
+
+// Domains — домены объектов из списка, с раскрытием групп.
+func (r *Resolver) Domains(refs []string) []string {
+	if isAny(refs) {
+		return nil
+	}
+	set := map[string]bool{}
+	var walk func(ref string, seen map[string]bool)
+	walk = func(ref string, seen map[string]bool) {
+		ref = strings.TrimSpace(ref)
+		for _, d := range r.domains[ref] {
+			set[d] = true
+		}
+		if members, ok := r.groups[ref]; ok && !seen[ref] {
+			seen[ref] = true
+			for _, m := range members {
+				walk(m, seen)
+			}
+		}
+	}
+	for _, ref := range refs {
+		walk(ref, map[string]bool{})
+	}
+	out := make([]string, 0, len(set))
+	for d := range set {
+		out = append(out, d)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Services раскрывает имена сервисов и литералы ("tcp/443", "udp/53-54",

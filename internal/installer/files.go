@@ -64,8 +64,11 @@ table inet rendolnet_boot {
 // SeedConfig — стартовый конфиг агента, тот же формат, что пишет агент.
 func SeedConfig(a Answers) ([]byte, error) {
 	seed := netcfg.Seed{
-		Hostname: a.Hostname, Mgmt: a.Mgmt, WAN: a.WAN, LAN: a.LAN, LANAddr: a.LANAddr,
+		Hostname: a.Hostname, Mgmt: a.Mgmt, WAN: a.WAN,
 		WANDHCP: a.WANAddr.DHCP, WANAddr: a.WANAddr.Address, Gateway: a.WANAddr.Gateway,
+	}
+	for _, l := range a.LANs {
+		seed.LANs = append(seed.LANs, netcfg.SeedLAN{Name: l.Iface, Addr: l.Addr})
 	}
 	c := netcfg.Default(seed)
 	if len(a.WANAddr.DNS) > 0 {

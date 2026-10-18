@@ -117,6 +117,30 @@ func TestAnswersValidation(t *testing.T) {
 	}
 }
 
+func TestSeveralLANs(t *testing.T) {
+	a := answers()
+	a.LANs = []LAN{{Iface: "eno4"}}
+	if err := a.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if len(a.LANs) != 2 || a.LANs[0].Iface != "eno3" || a.LANs[1].Addr != "192.168.2.1/24" {
+		t.Fatalf("%+v", a.LANs)
+	}
+	b, err := SeedConfig(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"lan2"`) {
+		t.Fatal("нет зоны lan2")
+	}
+
+	a = answers()
+	a.LANs = []LAN{{Iface: "eno4", Addr: "192.168.10.200/25"}}
+	if err := a.Validate(); err == nil {
+		t.Fatal("пересекающиеся сети LAN приняты")
+	}
+}
+
 func TestAutoinstall(t *testing.T) {
 	if AutoinstallRequested("quiet boot=live") || !AutoinstallRequested("boot=live rn.autoinstall=1") {
 		t.Fatal("флаг автоустановки")

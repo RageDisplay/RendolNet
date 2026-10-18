@@ -2,6 +2,7 @@ package netcfg
 
 import (
 	"fmt"
+	"net"
 	"net/netip"
 	"regexp"
 	"strconv"
@@ -28,7 +29,10 @@ func (e *ValidationError) Error() string {
 	return "netcfg: " + strings.Join(parts, "; ")
 }
 
-var nameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`)
+var (
+	nameRe   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`)
+	domainRe = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
+)
 
 type validator struct {
 	errs []FieldError
@@ -110,6 +114,11 @@ func Validate(c *Config) error {
 			}
 		}
 	}
+	for i := range c.Interfaces {
+		if d := c.Interfaces[i].DHCPServer; d != nil && d.Enabled {
+			validateDHCPServer(v, fmt.Sprintf("interfaces[%d].dhcp_server", i), &c.Interfaces[i])
+		}
+	}
 	for i, it := range c.Interfaces {
 		if it.VLAN != nil && it.VLAN.Parent != "" {
 			if parent := ifaces[it.VLAN.Parent]; parent != nil && parent.VLAN != nil {
@@ -161,8 +170,13 @@ func Validate(c *Config) error {
 	for i, a := range c.Objects.Addresses {
 		p := fmt.Sprintf("objects.addresses[%d]", i)
 		claim(p+".name", a.Name, "адрес")
-		if len(a.Prefixes) == 0 {
-			v.add(p+".prefixes", "пустой объект")
+		if len(a.Prefixes) == 0 && len(a.Domains) == 0 {
+			v.add(p+".prefixes", "пустой объект: нужны адреса или домены")
+		}
+		for j, d := range a.Domains {
+			if !domainRe.MatchString(NormalizeDomain(d)) || !strings.Contains(NormalizeDomain(d), ".") {
+				v.add(fmt.Sprintf("%s.domains[%d]", p, j), "недопустимое имя домена %q", d)
+			}
 		}
 		for j, s := range a.Prefixes {
 			if _, err := ParseAddrOrPrefix(s); err != nil {
@@ -330,6 +344,88 @@ func Validate(c *Config) error {
 		return &ValidationError{Errors: v.errs}
 	}
 	return nil
+}
+
+// DHCPPrefix — сеть, которую обслуживает DHCP-сервер интерфейса: первый
+// IPv4-адрес интерфейса.
+func DHCPPrefix(it *Interface) (netip.Prefix, bool) {
+	for _, a := range it.Addresses {
+		if p, err := netip.ParsePrefix(a); err == nil && p.Addr().Is4() {
+			return p, true
+		}
+	}
+	return netip.Prefix{}, false
+}
+
+func validateDHCPServer(v *validator, p string, it *Interface) {
+	d := it.DHCPServer
+	if it.Role == RoleWAN || it.Role == RoleMgmt || it.DHCP {
+		v.add(p, "DHCP-сервер включается только на LAN со статическим адресом")
+		return
+	}
+	// без адреса сервер не запускается; при коммите такой интерфейс
+	// отклоняет ValidateCommit
+	pfx, ok := DHCPPrefix(it)
+	if !ok {
+		return
+	}
+	inNet := func(field, s string) (netip.Addr, bool) {
+		a, err := netip.ParseAddr(s)
+		switch {
+		case err != nil || !a.Is4():
+			v.add(p+"."+field, "ожидается IPv4-адрес")
+		case !pfx.Contains(a):
+			v.add(p+"."+field, "адрес вне сети %s", pfx.Masked())
+		case a == pfx.Masked().Addr() || a == lastAddr(pfx):
+			v.add(p+"."+field, "адрес сети и широковещательный не выдаются")
+		default:
+			return a, true
+		}
+		return a, false
+	}
+	start, ok1 := inNet("range_start", d.RangeStart)
+	end, ok2 := inNet("range_end", d.RangeEnd)
+	if ok1 && ok2 && end.Less(start) {
+		v.add(p+".range_end", "конец диапазона меньше начала")
+	}
+	if d.LeaseMinutes != 0 && (d.LeaseMinutes < 2 || d.LeaseMinutes > 60*24*30) {
+		v.add(p+".lease_minutes", "срок аренды от 2 минут до 30 дней")
+	}
+	for i, s := range d.DNS {
+		if a, err := netip.ParseAddr(s); err != nil || !a.Is4() {
+			v.add(fmt.Sprintf("%s.dns[%d]", p, i), "ожидается IPv4-адрес")
+		}
+	}
+	if d.Domain != "" && !domainRe.MatchString(d.Domain) {
+		v.add(p+".domain", "недопустимое имя домена")
+	}
+	macs, ips := map[string]bool{}, map[netip.Addr]bool{}
+	for i, s := range d.Static {
+		sp := fmt.Sprintf("%s.static[%d]", p, i)
+		mac, err := net.ParseMAC(s.MAC)
+		if err != nil || len(mac) != 6 {
+			v.add(sp+".mac", "ожидается MAC вида aa:bb:cc:dd:ee:ff")
+		} else if macs[mac.String()] {
+			v.add(sp+".mac", "MAC %s уже привязан", mac)
+		} else {
+			macs[mac.String()] = true
+		}
+		if a, ok := inNet(fmt.Sprintf("static[%d].address", i), s.Address); ok {
+			if a == pfx.Addr() {
+				v.add(sp+".address", "это адрес самого узла")
+			} else if ips[a] {
+				v.add(sp+".address", "адрес %s уже привязан", a)
+			}
+			ips[a] = true
+		}
+	}
+}
+
+func lastAddr(p netip.Prefix) netip.Addr {
+	b := p.Masked().Addr().As4()
+	host := uint32(1)<<(32-p.Bits()) - 1
+	n := uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3]) | host
+	return netip.AddrFrom4([4]byte{byte(n >> 24), byte(n >> 16), byte(n >> 8), byte(n)})
 }
 
 // ValidateCommit добавляет к Validate проверки, которые нужны при применении,

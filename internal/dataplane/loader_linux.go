@@ -149,6 +149,23 @@ func (d *Dataplane) Apply(p *Plan) error {
 	return nil
 }
 
+// SetAddr добавляет адрес в набор действующего банка или убирает его.
+// Номер набора — из плана, который сейчас применён.
+func (d *Dataplane) SetAddr(set uint32, pfx netip.Prefix, add bool) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.gen == 0 || set == 0 {
+		return nil
+	}
+	k := bpf.RendolSetKey{Prefixlen: 32 + prefixBits(pfx), Set: set | (d.gen&1)<<31, A: toAddr(pfx.Addr())}
+	if !add {
+		_ = d.objs.AddrSets.Delete(&k)
+		return nil
+	}
+	one := uint8(1)
+	return d.objs.AddrSets.Put(&k, &one)
+}
+
 func (d *Dataplane) writeBank(p *Plan, bank, gen uint32) error {
 	d.clearBank(bank)
 

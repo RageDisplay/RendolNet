@@ -19,6 +19,7 @@ import (
 	"rendolnet/internal/agent"
 	"rendolnet/internal/agentclient"
 	"rendolnet/internal/dataplane"
+	"rendolnet/internal/dhcpd"
 	"rendolnet/internal/netcfg"
 	"rendolnet/internal/platform/auth"
 	"rendolnet/internal/platform/db"
@@ -35,12 +36,13 @@ func (d *stubDP) RefreshAddresses()           {}
 func (d *stubDP) RuleCounters() map[string]dataplane.RuleCounter {
 	return map[string]dataplane.RuleCounter{}
 }
-func (d *stubDP) Stats() dataplane.Stats              { return dataplane.Stats{} }
-func (d *stubDP) Sessions(int) []dataplane.Session    { return nil }
-func (d *stubDP) GC(func(dataplane.Event)) (int, int) { return 0, 0 }
-func (d *stubDP) FlushSessions()                      {}
-func (d *stubDP) XDPMode() string                     { return "native" }
-func (d *stubDP) Generation() uint32                  { return 1 }
+func (d *stubDP) Stats() dataplane.Stats                   { return dataplane.Stats{} }
+func (d *stubDP) Sessions(int) []dataplane.Session         { return nil }
+func (d *stubDP) GC(func(dataplane.Event)) (int, int)      { return 0, 0 }
+func (d *stubDP) FlushSessions()                           {}
+func (d *stubDP) XDPMode() string                          { return "native" }
+func (d *stubDP) SetAddr(uint32, netip.Prefix, bool) error { return nil }
+func (d *stubDP) Generation() uint32                       { return 1 }
 func (d *stubDP) Events(fn func(dataplane.Event)) error {
 	for _, e := range d.events {
 		fn(e)
@@ -56,6 +58,7 @@ func (stubNet) Links() ([]agent.Link, error) {
 }
 func (stubNet) Watch(context.Context, func()) {}
 func (stubNet) Gateways() []agent.Gateway     { return nil }
+func (stubNet) Leases() []dhcpd.Lease         { return nil }
 func (stubNet) DisableBootGuard() error       { return nil }
 
 type client struct {
@@ -109,7 +112,7 @@ func setup(t *testing.T) (*client, *Server, *agent.Agent) {
 	}
 
 	dir := t.TempDir()
-	seed := netcfg.Default(netcfg.Seed{Hostname: "fw", Mgmt: "eth0", WAN: "eth1", LAN: "eth2", LANAddr: "192.168.1.1/24", WANDHCP: true})
+	seed := netcfg.Default(netcfg.Seed{Hostname: "fw", Mgmt: "eth0", WAN: "eth1", LANs: []netcfg.SeedLAN{{Name: "eth2", Addr: "192.168.1.1/24"}}, WANDHCP: true})
 	dp := &stubDP{events: []dataplane.Event{{
 		Time: time.Now().Add(-5 * time.Second), Type: dataplane.EventDeny, Action: "deny", Proto: 6,
 		Src: netip.MustParseAddr("198.51.100.7"), Dst: netip.MustParseAddr("203.0.113.2"), DstPort: 22, Count: 1, Packets: 1,

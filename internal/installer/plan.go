@@ -61,10 +61,11 @@ func Plan(a Answers, d Disk) ([]Step, error) {
 	chroot := func(args ...string) []string { return append([]string{"chroot", Target}, args...) }
 
 	var data []string
-	for _, n := range []string{a.WAN, a.LAN} {
-		if n != "" {
-			data = append(data, n)
-		}
+	if a.WAN != "" {
+		data = append(data, a.WAN)
+	}
+	for _, l := range a.LANs {
+		data = append(data, l.Iface)
 	}
 	hosts := fmt.Sprintf("127.0.0.1\tlocalhost\n127.0.1.1\t%s\n::1\tlocalhost ip6-localhost ip6-loopback\n", a.Hostname)
 

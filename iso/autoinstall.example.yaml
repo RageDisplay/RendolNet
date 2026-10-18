@@ -15,8 +15,11 @@ wan: eno2
 wan_addr:
   dhcp: true
 
-lan: eno3
-lan_addr: 192.168.1.1/24
+lans:
+  - iface: eno3
+    addr: 192.168.1.1/24      # зона lan
+  - iface: eno4
+    addr: 192.168.2.1/24      # зона lan2
 
 # ssh_key: ssh-ed25519 AAAA... admin@laptop
 reboot: true

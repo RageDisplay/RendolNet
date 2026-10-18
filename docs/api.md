@@ -35,6 +35,12 @@
 | `GET /v1/dashboard` | viewer | всё для главной страницы |
 | `GET /v1/links` | viewer | интерфейсы узла со счётчиками |
 | `GET /v1/sessions?limit=N` | viewer | активные сессии |
+| `GET /v1/dhcp/leases` | viewer | аренды и привязки DHCP-сервера |
+| `GET /v1/diag/routes`, `GET /v1/diag/neighbors` | viewer | таблица маршрутов ядра, соседи ARP/NDP |
+| `GET /v1/diag/fqdn` | viewer | адреса доменов из объектов, узнанные через DNS |
+| `POST /v1/diag/ping` | operator | `{"target", "interface", "count"}`, до 10 запросов |
+| `POST /v1/diag/trace` | operator | `{"target", "max_hops"}`, ICMP, до 30 прыжков |
+| `POST /v1/diag/lookup` | operator | `{"name", "server"}`, по умолчанию первый из `system.dns` |
 | `DELETE /v1/sessions` | operator | сбросить все сессии |
 | `GET /v1/counters` | viewer | срабатывания правил по id |
 | `GET /v1/events?type=&action=&addr=&port=&rule=&since=&before=&limit=` | viewer | журнал |

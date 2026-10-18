@@ -57,6 +57,10 @@ func (a *Agent) Handler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, a.Status())
 	})
+	a.diagHandlers(mux)
+	mux.HandleFunc("GET /v1/dhcp/leases", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, a.net.Leases())
+	})
 	mux.HandleFunc("GET /v1/links", func(w http.ResponseWriter, r *http.Request) {
 		links, err := a.net.Links()
 		if err != nil {

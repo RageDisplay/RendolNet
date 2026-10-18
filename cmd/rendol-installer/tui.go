@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"rendolnet/internal/installer"
+	"rendolnet/internal/netcfg"
 )
 
 var (
@@ -113,7 +114,7 @@ var roleNames = []string{"—", "управление", "WAN", "LAN"}
 
 func newModel(e *env, disks []installer.Disk, nics []installer.NIC) model {
 	m := model{e: e, disks: disks, nics: nics, roles: make([]int, len(nics)), events: make(chan tea.Msg, 16)}
-	m.a = installer.Answers{Language: "ru", Hostname: "rendolnet", Timezone: "Europe/Moscow", LANAddr: "192.168.1.1/24"}
+	m.a = installer.Answers{Language: "ru", Hostname: "rendolnet", Timezone: "Europe/Moscow"}
 	// разумное начальное распределение: первая карта — управление, вторая — WAN, третья — LAN
 	for i := range nics {
 		if i < 3 {
@@ -221,7 +222,12 @@ func (m model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "esc":
 			m.sc = scDisk
 		case "enter":
-			m.a.Mgmt, m.a.WAN, m.a.LAN = "", "", ""
+			// адреса LAN, введённые раньше, сохраняются за своими портами
+			prev := map[string]string{}
+			for _, l := range m.a.LANs {
+				prev[l.Iface] = l.Addr
+			}
+			m.a.Mgmt, m.a.WAN, m.a.LANs = "", "", nil
 			count := map[int]int{}
 			for i, r := range m.roles {
 				count[r]++
@@ -231,11 +237,16 @@ func (m model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 				case 2:
 					m.a.WAN = m.nics[i].Name
 				case 3:
-					m.a.LAN = m.nics[i].Name
+					name := m.nics[i].Name
+					addr := prev[name]
+					if addr == "" {
+						addr = installer.DefaultLANAddr(len(m.a.LANs))
+					}
+					m.a.LANs = append(m.a.LANs, installer.LAN{Iface: name, Addr: addr})
 				}
 			}
-			if count[1] != 1 || count[2] > 1 || count[3] > 1 {
-				m.err = "Нужен ровно один интерфейс управления, WAN и LAN — не больше одного"
+			if count[1] != 1 || count[2] > 1 {
+				m.err = "Нужен ровно один интерфейс управления и не больше одного WAN"
 				return m, nil
 			}
 			m.dhcp = m.a.MgmtAddr.DHCP || m.a.MgmtAddr.Address == ""
@@ -280,7 +291,9 @@ func (m model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case tea.KeyEsc:
 			m.sc = scNICs
 		case tea.KeyEnter:
-			m.a.LANAddr = strings.TrimSpace(m.f.fields[0].value)
+			for i := range m.a.LANs {
+				m.a.LANs[i].Addr = strings.TrimSpace(m.f.fields[i].value)
+			}
 			m.f = form{fields: []field{{"Имя узла", m.a.Hostname}, {"Часовой пояс", m.a.Timezone}, {"Ключ SSH (необяз.)", m.a.SSHKey}}}
 			m.sc = scHost
 		default:
@@ -338,8 +351,11 @@ func (m model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) afterWAN() model {
-	if m.a.LAN != "" {
-		m.f = form{fields: []field{{"Адрес/маска LAN", m.a.LANAddr}}}
+	if len(m.a.LANs) > 0 {
+		m.f = form{}
+		for i, l := range m.a.LANs {
+			m.f.fields = append(m.f.fields, field{fmt.Sprintf("%s (зона %s)", l.Iface, netcfg.LANZone(i)), l.Addr})
+		}
 		m.sc = scLAN
 		return m
 	}
@@ -388,7 +404,7 @@ func (m model) View() string {
 		b.WriteString(sDim.Render("\nEnter подтвердить · Esc назад"))
 
 	case scNICs:
-		b.WriteString("Роли сетевых портов. Управление — обязательно, WAN и LAN — по одному.\n\n")
+		b.WriteString("Роли сетевых портов. Управление — обязательно, WAN — не больше одного, LAN — сколько нужно.\n\n")
 		for i, n := range m.nics {
 			mark := "  "
 			link := sDim.Render("нет линка")
@@ -427,9 +443,13 @@ func (m model) View() string {
 		b.WriteString(sDim.Render("\nTab поле · Enter далее · Esc назад"))
 
 	case scLAN:
-		fmt.Fprintf(&b, "Внутренняя сеть (LAN) · %s\n\n", m.a.LAN)
+		b.WriteString("Внутренние сети (LAN): адрес узла с маской\n\n")
 		b.WriteString(m.f.view())
-		b.WriteString(sDim.Render("\nСети LAN по умолчанию разрешён выход в интернет через маскарад.\n\nEnter далее · Esc назад"))
+		hint := "\nВсем LAN по умолчанию разрешён выход в интернет через маскарад."
+		if len(m.a.LANs) > 1 {
+			hint += "\nМежду собой LAN не связаны: это настраивается правилами в веб-интерфейсе."
+		}
+		b.WriteString(sDim.Render(hint + "\n\nTab поле · Enter далее · Esc назад"))
 
 	case scHost:
 		b.WriteString("Узел\n\n")
@@ -456,8 +476,8 @@ func (m model) View() string {
 		if m.a.WAN != "" {
 			rows = append(rows, [2]string{"WAN", m.a.WAN + "  " + addr(m.a.WANAddr)})
 		}
-		if m.a.LAN != "" {
-			rows = append(rows, [2]string{"LAN", m.a.LAN + "  " + m.a.LANAddr})
+		for i, l := range m.a.LANs {
+			rows = append(rows, [2]string{netcfg.LANZone(i), l.Iface + "  " + l.Addr})
 		}
 		rows = append(rows, [2]string{"Часовой пояс", m.a.Timezone})
 		var s strings.Builder
