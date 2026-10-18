@@ -84,9 +84,23 @@ COPY --from=build /out/rendol-agent /app/rendol-agent
 COPY deploy/dev/agent-entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]
 
+# Порт 443 без root: процессу с uid не 0 Kubernetes не передаёт добавленные
+# возможности ядра, поэтому NET_BIND_SERVICE ставится на сам файл.
+FROM ${GO_IMAGE} AS api-caps
+ARG APT_MIRROR=
+RUN S=/etc/apt/sources.list.d/debian.sources \
+ && sed -i "s#^URIs: http://deb.debian.org/debian\$#URIs: ${APT_MIRROR:-http://deb.debian.org/debian}#" $S \
+ && apt-get update && apt-get install -y --no-install-recommends libcap2-bin \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=build /out/rendol-api /out/rendol-api
+RUN setcap cap_net_bind_service=+ep /out/rendol-api \
+ && mkdir -p /dirs/host /dirs/tls && chmod 2770 /dirs/host && chmod 0700 /dirs/tls
+
 # api идёт последним: это цель по умолчанию
-FROM gcr.io/distroless/static-debian12 AS api
-COPY --from=build /out/rendol-api /app/rendol-api
+FROM gcr.io/distroless/static-debian12:nonroot AS api
+COPY --from=api-caps /out/rendol-api /app/rendol-api
+# пустые каталоги с владельцем api: из них docker заполняет новые тома (стенд)
+COPY --from=api-caps --chown=65532:65532 /dirs/ /var/lib/rendolnet/
 COPY --from=web /web/dist /app/web
 WORKDIR /app
 ENTRYPOINT ["/app/rendol-api"]

@@ -96,6 +96,14 @@ func main() {
 		log.Error("сокет", "err", err)
 		os.Exit(1)
 	}
+	// rendol-api работает не от root (uid и gid 65532) и подключается к
+	// сокету через группу
+	gid := env.Int("RN_AGENT_SOCKET_GID", 65532)
+	for _, p := range []string{filepath.Dir(sock), sock} {
+		if err := os.Chown(p, 0, gid); err != nil {
+			log.Warn("группа сокета", "path", p, "err", err)
+		}
+	}
 	srv := &http.Server{Handler: a.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()

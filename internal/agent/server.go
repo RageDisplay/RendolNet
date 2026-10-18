@@ -94,7 +94,7 @@ func (a *Agent) Handler() http.Handler {
 	return mux
 }
 
-// ListenUnix открывает сокет с правами 0660: группа — та же, что у rendol-api.
+// ListenUnix открывает сокет с правами 0660. Группу (rendol-api) ставит вызывающий.
 func ListenUnix(path string) (net.Listener, error) {
 	_ = os.Remove(path)
 	var lc net.ListenConfig

@@ -24,6 +24,17 @@ var version = "dev"
 
 func main() {
 	log := rnlog.Setup("rendol-api")
+	if len(os.Args) > 1 && os.Args[1] == "prepare-dirs" {
+		err := prepareDirs(map[string]os.FileMode{
+			env.String("RN_HOST_DIR", "/var/lib/rendolnet/host"): 0o770 | os.ModeSetgid,
+			env.String("RN_TLS_DIR", "/var/lib/rendolnet/tls"):   0o700,
+		})
+		if err != nil {
+			log.Error("каталоги api", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
 	log.Info("старт", "version", version)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

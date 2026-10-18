@@ -44,9 +44,12 @@ services:
       - "8443:8443"
     volumes:
       - run:/run/rendolnet
-      - state:/var/lib/rendolnet
+      - apihost:/var/lib/rendolnet/host
+      - apitls:/var/lib/rendolnet/tls
 
 volumes:
   db:
   run:
   state:
+  apihost:
+  apitls:
