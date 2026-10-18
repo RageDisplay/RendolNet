@@ -146,15 +146,22 @@ test:bpf:
   script:
     - cd src
     - docker build -q --build-arg GO_IMAGE="$GO_IMAGE" --build-arg APT_MIRROR="${RN_APT_MIRROR:-}" -f build/Dockerfile.bpf -t rn-bpf build
+    # Исходники копируются, а не монтируются: если раннер отдаёт заданию сокет
+    # docker хоста (dind тогда не стартует), путь для -v ищется на хосте и там
+    # пусто. docker cp работает и с dind, и с сокетом хоста.
     - |
-      docker run --rm --privileged -e RN_BPF_TEST=1 -e GOPROXY="${RN_GOPROXY:-https://proxy.golang.org,direct}" \
-        -v "$PWD:/src" -w /src rn-bpf sh -c '
+      CID=$(docker create --privileged -e RN_BPF_TEST=1 -e GOPROXY="${RN_GOPROXY:-https://proxy.golang.org,direct}" \
+        -w /src rn-bpf sh -c '
           set -e
           sha256sum internal/dataplane/ebpf/rendol_bpfel.go > /tmp/before
           go generate ./internal/dataplane/ebpf/
           sha256sum -c --quiet /tmp/before || { echo "bpf/rendol.c изменён, а обвязка не перегенерирована: make bpf"; exit 1; }
           go test -count=1 -v ./internal/dataplane/ ./internal/dhcpd/ ./internal/agent/ > /tmp/t.txt 2>&1 || { cat /tmp/t.txt; exit 1; }
-          grep -E "^(---|ok)" /tmp/t.txt'
+          grep -E "^(---|ok)" /tmp/t.txt')
+      docker cp ./. "$CID:/src"
+      RC=0; docker start -a "$CID" || RC=$?
+      docker rm -f "$CID" >/dev/null
+      exit $RC
 
 test:lint:
   <<: *go_job
