@@ -19,6 +19,8 @@ export const en: Record<keyof typeof ru, string> = {
   "dhcp.lead": "Address assignment on LAN networks and a DNS proxy on node addresses. Changes are applied with the rest of the config.",
   "dhcp.dns": "DNS proxy",
   "dhcp.dns.enable": "Answer LAN clients' DNS queries on node addresses",
+  "dhcp.dns.intercept": "Intercept queries to other DNS servers",
+  "dhcp.dns.intercept.hint": "UDP and TCP DNS queries from LAN to any server are redirected to the node proxy. Domain objects then work even for clients with a manually configured 8.8.8.8.",
   "dhcp.dns.upstreams": "Upstream servers",
   "dhcp.dns.upstreams.hint": "Where queries are forwarded. Empty means 1.1.1.1 and 8.8.8.8",
   "dhcp.nolan": "No interfaces with the LAN role.",

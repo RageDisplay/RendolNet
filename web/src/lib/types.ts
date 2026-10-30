@@ -121,7 +121,7 @@ export interface Config {
   protection: { blocklist?: string[]; syn_rate?: number; syn_burst?: number; log_default_deny: boolean };
   management: { interface: string; allow_from?: string[]; ports: number[] };
   zapret: { enabled: boolean; strategy?: string; interface?: string; fooling?: string; hosts?: string[]; ips?: string[] };
-  dns_proxy?: { enabled: boolean };
+  dns_proxy?: { enabled: boolean; intercept?: boolean };
 }
 
 export interface FieldError {

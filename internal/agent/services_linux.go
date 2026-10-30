@@ -58,6 +58,9 @@ func (s *services) sync(c *netcfg.Config) {
 	defer s.mu.Unlock()
 	s.syncDHCP(c)
 	s.syncDNS(c)
+	if err := syncDNSRedirect(c); err != nil {
+		s.log.Warn("перехват DNS", "err", err)
+	}
 }
 
 func dhcpConfig(c *netcfg.Config, it *netcfg.Interface) (dhcpd.Config, bool) {

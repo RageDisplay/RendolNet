@@ -37,11 +37,13 @@ export function DhcpDns() {
   const { data: leases } = usePoll(() => api.get<Lease[]>("/v1/dhcp/leases"), 10000);
 
   const [proxy, setProxy] = useState(cfg.dns_proxy?.enabled ?? false);
+  const [intercept, setIntercept] = useState(cfg.dns_proxy?.intercept ?? false);
   const [upstreams, setUpstreams] = useState(cfg.system.dns ?? []);
   const [srv, setSrv] = useState<Servers>(serversOf(cfg.interfaces));
 
   useEffect(() => {
     setProxy(cfg.dns_proxy?.enabled ?? false);
+    setIntercept(cfg.dns_proxy?.intercept ?? false);
     setUpstreams(cfg.system.dns ?? []);
     setSrv(serversOf(cfg.interfaces));
   }, [cfg]);
@@ -49,6 +51,7 @@ export function DhcpDns() {
   const lans = cfg.interfaces.filter((i) => i.role === "lan");
   const changed =
     proxy !== (cfg.dns_proxy?.enabled ?? false) ||
+    intercept !== (cfg.dns_proxy?.intercept ?? false) ||
     JSON.stringify(upstreams) !== JSON.stringify(cfg.system.dns ?? []) ||
     JSON.stringify(srv) !== JSON.stringify(serversOf(cfg.interfaces));
 
@@ -57,7 +60,7 @@ export function DhcpDns() {
   const save = async () => {
     try {
       await app.edit((c) => {
-        c.dns_proxy = { enabled: proxy };
+        c.dns_proxy = { enabled: proxy, intercept };
         c.system.dns = upstreams;
         for (const it of c.interfaces) {
           if (srv[it.name]) it.dhcp_server = srv[it.name];
@@ -92,11 +95,17 @@ export function DhcpDns() {
         <div className="panel-head">
           <span className="panel-title">{t("dhcp.dns")}</span>
         </div>
-        <div className="panel-body form-grid" style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 2fr)" }}>
-          <Switch checked={proxy} onChange={setProxy} label={t("dhcp.dns.enable")} disabled={!app.canEdit} />
-          <Field label={t("dhcp.dns.upstreams")} hint={t("dhcp.dns.upstreams.hint")} error={fieldError(app.validation, "system.dns")}>
-            <TagInput value={upstreams} onChange={setUpstreams} placeholder="1.1.1.1" mono />
-          </Field>
+        <div className="panel-body stack">
+          <div className="form-grid" style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 2fr)" }}>
+            <Switch checked={proxy} onChange={setProxy} label={t("dhcp.dns.enable")} disabled={!app.canEdit} />
+            <Field label={t("dhcp.dns.upstreams")} hint={t("dhcp.dns.upstreams.hint")} error={fieldError(app.validation, "system.dns")}>
+              <TagInput value={upstreams} onChange={setUpstreams} placeholder="1.1.1.1" mono />
+            </Field>
+          </div>
+          <div>
+            <Switch checked={intercept} onChange={setIntercept} label={t("dhcp.dns.intercept")} disabled={!app.canEdit || !proxy} />
+            <div className="muted">{t("dhcp.dns.intercept.hint")}</div>
+          </div>
         </div>
       </div>
 

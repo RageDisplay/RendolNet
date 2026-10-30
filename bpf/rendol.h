@@ -114,6 +114,8 @@ struct iface {
 	__u8 flags;
 };
 
+#define IF_F_DNS_REDIRECT 0x01
+
 struct rule {
 	__u32 src_set;
 	__u32 dst_set;

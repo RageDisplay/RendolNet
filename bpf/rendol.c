@@ -787,6 +787,17 @@ int tc_ingress(struct __sk_buff *skb)
 	if (!p.ok || is_nd(&p))
 		return TC_ACT_OK;
 
+	/* Перехват DNS: запрос к чужому серверу уходит в стек, там nftables
+	 * агента заворачивает его на DNS-прокси узла. Политику он не проходит —
+	 * иначе правило «запретить LAN порт 53 наружу» отбросило бы его раньше. */
+	if ((ifc->flags & IF_F_DNS_REDIRECT) && p.v4 && p.dport == bpf_htons(53) &&
+	    (p.proto == IPPROTO_UDP || p.proto == IPPROTO_TCP)) {
+		int local;
+		egress_zone(skb, &p, &local);
+		if (!local)
+			return TC_ACT_OK;
+	}
+
 	__u32 zero = 0;
 	__u32 *genp = bpf_map_lookup_elem(&active, &zero);
 	if (!genp)

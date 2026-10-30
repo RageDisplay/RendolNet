@@ -252,6 +252,33 @@ func TestOtherHostFrameIgnored(t *testing.T) {
 	}
 }
 
+// С перехватом DNS запрос к чужому серверу уходит в стек мимо политики,
+// прочий трафик идёт как обычно. Без перехвата тот же запрос режет политика,
+// см. «UDP наружу» в TestPolicyDeny.
+func TestDNSInterceptBypass(t *testing.T) {
+	q := testPkt{src: client, dst: internet, sport: 5000, dport: 53, proto: 17}
+	e := setupEnv(t, func(c *netcfg.Config) { c.DNSProxy = netcfg.DNSProxy{Enabled: true, Intercept: true} })
+	if ret, _ := e.in(q, "rn-lan"); ret != actOK {
+		t.Fatalf("перехват: %d", ret)
+	}
+	tcp := testPkt{src: client, dst: internet, sport: 5001, dport: 53, proto: 6, flags: tcpSYN}
+	if ret, _ := e.in(tcp, "rn-lan"); ret != actOK {
+		t.Fatalf("перехват TCP: %d", ret)
+	}
+	if s := e.dp.Stats(); s.PolicyDeny != 0 {
+		t.Fatalf("перехваченный запрос прошёл через политику: %d", s.PolicyDeny)
+	}
+	other := testPkt{src: client, dst: internet, sport: 5002, dport: 22, proto: 6, flags: tcpSYN}
+	if ret, _ := e.in(other, "rn-lan"); ret != actShot {
+		t.Fatalf("перехват пропустил не DNS: %d", ret)
+	}
+	localTCP := tcp
+	localTCP.dst = netip.MustParseAddr("10.0.0.1")
+	if ret, _ := e.in(localTCP, "rn-lan"); ret != actShot {
+		t.Fatalf("DNS на другой адрес узла обошёл политику: %d", ret)
+	}
+}
+
 // Адреса домена добавляются в набор действующего банка на лету.
 func TestDomainSetAtRuntime(t *testing.T) {
 	e := setupEnv(t, func(c *netcfg.Config) {

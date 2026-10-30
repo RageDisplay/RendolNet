@@ -277,6 +277,9 @@ func (d *Dataplane) syncIfaces(p *Plan) error {
 			continue
 		}
 		v := bpf.RendolIface{Zone: ip.Zone, Role: ip.Role}
+		if ip.DNSRedirect {
+			v.Flags |= ifDNSRedirect
+		}
 		if a, ok := primaryV4(name); ok {
 			v.Addr4 = be32(a)
 		}

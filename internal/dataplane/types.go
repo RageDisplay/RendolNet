@@ -24,6 +24,9 @@ type Session struct {
 	Idle       float64    `json:"idle_s"`
 }
 
+// флаги struct iface, см. bpf/rendol.h
+const ifDNSRedirect = 0x01
+
 type EventType string
 
 const (

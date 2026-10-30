@@ -54,6 +54,9 @@ type PairKey struct {
 type IfacePlan struct {
 	Zone uint16
 	Role uint8
+	// DNSRedirect: запросы к чужим DNS-серверам идут мимо политики, их
+	// перехватывает nftables агента
+	DNSRedirect bool
 }
 
 type SNATPlan struct {
@@ -138,7 +141,7 @@ func Compile(c *netcfg.Config, prevSlots map[string]uint32) (*Plan, error) {
 		if !it.Enabled {
 			continue
 		}
-		p.Ifaces[it.Name] = IfacePlan{Zone: p.Zones[it.Zone], Role: roles[it.Role]}
+		p.Ifaces[it.Name] = IfacePlan{Zone: p.Zones[it.Zone], Role: roles[it.Role], DNSRedirect: netcfg.DNSIntercepted(c, &it)}
 	}
 
 	cp.assignSlots(c.Rules, prevSlots)

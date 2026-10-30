@@ -77,9 +77,21 @@ type DHCPStatic struct {
 const DefaultLeaseMinutes = 720
 
 // DNSProxy принимает запросы на адресах узла в LAN и пересылает их серверам
-// из system.dns.
+// из system.dns. Intercept заворачивает на него и запросы клиентов LAN к
+// любым другим DNS-серверам.
 type DNSProxy struct {
-	Enabled bool `json:"enabled"`
+	Enabled   bool `json:"enabled"`
+	Intercept bool `json:"intercept,omitempty"`
+}
+
+// DNSIntercepted: перехват работает там, где слушает DNS-прокси — на
+// включённых LAN со статическим IPv4-адресом.
+func DNSIntercepted(c *Config, it *Interface) bool {
+	if !c.DNSProxy.Enabled || !c.DNSProxy.Intercept || !it.Enabled || it.DHCP || it.Role != RoleLAN {
+		return false
+	}
+	_, ok := DHCPPrefix(it)
+	return ok
 }
 
 type VLAN struct {
@@ -102,8 +114,8 @@ type Objects struct {
 }
 
 // Domains — адреса, которые DNS-прокси узла узнаёт из ответов на эти имена
-// и их поддомены. Клиенты должны спрашивать DNS у узла, иначе адреса не
-// попадут в объект.
+// и их поддомены. Запросы клиентов должны проходить через прокси напрямую
+// или через перехват, иначе адреса не попадут в объект.
 type AddressObject struct {
 	Name     string   `json:"name"`
 	Prefixes []string `json:"prefixes"`
