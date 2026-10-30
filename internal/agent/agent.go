@@ -37,6 +37,7 @@ type Network interface {
 	DisableBootGuard() error
 	Gateways() []Gateway
 	Leases() []dhcpd.Lease
+	WireGuard() ([]WireGuardStatus, error)
 }
 
 // Gateway — шлюз маршрута по умолчанию и ответил ли он на ping.

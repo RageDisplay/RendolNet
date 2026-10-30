@@ -56,6 +56,7 @@ func (f *fakeNet) Links() ([]Link, error)                      { return nil, nil
 func (f *fakeNet) Watch(context.Context, func())               {}
 func (f *fakeNet) Gateways() []Gateway                         { return nil }
 func (f *fakeNet) Leases() []dhcpd.Lease                       { return nil }
+func (f *fakeNet) WireGuard() ([]WireGuardStatus, error)       { return nil, nil }
 
 func (f *fakeNet) DisableBootGuard() error {
 	f.guardOff++

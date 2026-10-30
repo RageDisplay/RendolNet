@@ -52,7 +52,23 @@ type Interface struct {
 	MTU         int      `json:"mtu,omitempty"`
 	VLAN        *VLAN    `json:"vlan,omitempty"`
 
-	DHCPServer *DHCPServer `json:"dhcp_server,omitempty"`
+	WireGuard  *WireGuardConfig `json:"wireguard,omitempty"`
+	DHCPServer *DHCPServer      `json:"dhcp_server,omitempty"`
+}
+
+type WireGuardConfig struct {
+	ListenPort int             `json:"listen_port"`
+	PrivateKey string          `json:"private_key"`
+	Peers      []WireGuardPeer `json:"peers"`
+}
+
+type WireGuardPeer struct {
+	Name                string   `json:"name"`
+	PublicKey           string   `json:"public_key"`
+	PresharedKey        string   `json:"preshared_key,omitempty"`
+	AllowedIPs          []string `json:"allowed_ips"`
+	Endpoint            string   `json:"endpoint,omitempty"`
+	PersistentKeepalive int      `json:"persistent_keepalive,omitempty"`
 }
 
 // DHCPServer раздаёт адреса в сети интерфейса. Шлюзом клиентам выдаётся

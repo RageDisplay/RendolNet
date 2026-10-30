@@ -11,7 +11,7 @@ ISO на голое железо или виртуальную машину: о�
   TCP/UDP/ICMP, IPv4 и IPv6;
 - маскарад и SNAT, проброс портов;
 - блок-лист и ограничение SYN на XDP, до разбора пакета ядром;
-- статические маршруты, VLAN, DHCP-клиент на WAN;
+- статические маршруты, VLAN, DHCP-клиент на WAN, WireGuard-туннели;
 - черновик конфигурации, diff, применение с подтверждением и автооткатом,
   история ревизий;
 - журнал отбоев и сессий, таблица активных соединений, графики трафика;
@@ -37,6 +37,7 @@ ISO на голое железо или виртуальную машину: о�
 - [update.md](docs/update.md) — пакет обновления и как он ставится
 - [zapret.md](docs/zapret.md) — обход DPI
 - [dhcp-dns.md](docs/dhcp-dns.md) — DHCP-сервер, DNS-прокси, объекты по доменам
+- [wireguard.md](docs/wireguard.md) — VPN-туннели, клиенты и site-to-site
 - [api.md](docs/api.md) — HTTP API и `rendolctl`
 - [build.md](docs/build.md) — сборка, зеркала Nexus, CI
 - [development.md](docs/development.md) — стенды и тесты

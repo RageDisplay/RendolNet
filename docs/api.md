@@ -34,6 +34,8 @@
 | `GET /v1/config/export[?revision=N]` | viewer | JSON для скачивания |
 | `GET /v1/dashboard` | viewer | всё для главной страницы |
 | `GET /v1/links` | viewer | интерфейсы узла со счётчиками |
+| `GET /v1/wireguard` | viewer | устройства, peers, handshake и счётчики WireGuard |
+| `POST /v1/wireguard/keypair` | operator | новая приватная и публичная пара ключей WireGuard |
 | `GET /v1/sessions?limit=N` | viewer | активные сессии |
 | `GET /v1/dhcp/leases` | viewer | аренды и привязки DHCP-сервера |
 | `GET /v1/diag/routes`, `GET /v1/diag/neighbors` | viewer | таблица маршрутов ядра, соседи ARP/NDP |

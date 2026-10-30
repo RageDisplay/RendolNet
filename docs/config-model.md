@@ -10,7 +10,7 @@
 |---|---|
 | `system` | имя узла, DNS-серверы |
 | `zones` | зоны; `self` — сам узел, объявлять не нужно |
-| `interfaces` | порты: роль (`wan`, `lan`, `mgmt`), зона, DHCP или адреса, MTU, VLAN |
+| `interfaces` | порты и WireGuard: роль (`wan`, `lan`, `mgmt`), зона, DHCP или адреса, MTU, VLAN, peers |
 | `routes` | статические маршруты |
 | `objects` | именованные адреса, группы, сервисы |
 | `rules` | правила по порядку |

@@ -19,7 +19,42 @@ export interface Iface {
   addresses?: string[];
   mtu?: number;
   vlan?: { parent: string; id: number } | null;
+  wireguard?: WireGuardConfig | null;
   dhcp_server?: DHCPServer | null;
+}
+
+export interface WireGuardConfig {
+  listen_port: number;
+  private_key: string;
+  peers: WireGuardPeer[];
+}
+
+export interface WireGuardPeer {
+  name: string;
+  public_key: string;
+  preshared_key?: string;
+  allowed_ips: string[];
+  endpoint?: string;
+  persistent_keepalive?: number;
+}
+
+export interface WireGuardStatus {
+  name: string;
+  public_key: string;
+  listen_port: number;
+  peers: {
+    public_key: string;
+    endpoint?: string;
+    allowed_ips: string[];
+    last_handshake: string;
+    rx_bytes: number;
+    tx_bytes: number;
+  }[];
+}
+
+export interface WireGuardKeypair {
+  private_key: string;
+  public_key: string;
 }
 
 export interface DHCPServer {

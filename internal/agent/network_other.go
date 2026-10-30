@@ -23,4 +23,5 @@ func (n *LinuxNetwork) Watch(context.Context, func())               {}
 func (n *LinuxNetwork) DisableBootGuard() error                     { return nil }
 func (n *LinuxNetwork) Gateways() []Gateway                         { return nil }
 func (n *LinuxNetwork) Leases() []dhcpd.Lease                       { return nil }
+func (n *LinuxNetwork) WireGuard() ([]WireGuardStatus, error)       { return nil, errNotLinux }
 func (n *LinuxNetwork) SetDNSObserver(func([]byte))                 {}

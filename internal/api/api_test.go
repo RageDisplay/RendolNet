@@ -59,7 +59,10 @@ func (stubNet) Links() ([]agent.Link, error) {
 func (stubNet) Watch(context.Context, func()) {}
 func (stubNet) Gateways() []agent.Gateway     { return nil }
 func (stubNet) Leases() []dhcpd.Lease         { return nil }
-func (stubNet) DisableBootGuard() error       { return nil }
+func (stubNet) WireGuard() ([]agent.WireGuardStatus, error) {
+	return nil, nil
+}
+func (stubNet) DisableBootGuard() error { return nil }
 
 type client struct {
 	t    *testing.T

@@ -104,6 +104,8 @@ func (s *Server) Handler() http.Handler {
 
 	mux.Handle("GET /v1/dashboard", need(V, s.handleDashboard))
 	mux.Handle("GET /v1/links", need(V, s.handleLinks))
+	mux.Handle("GET /v1/wireguard", need(V, s.handleWireGuard))
+	mux.Handle("POST /v1/wireguard/keypair", need(O, s.handleWireGuardKeypair))
 	mux.Handle("GET /v1/dhcp/leases", need(V, s.handleLeases))
 	mux.Handle("GET /v1/diag/{name}", need(V, s.handleDiag))
 	mux.Handle("POST /v1/diag/{name}", need(O, s.handleDiag))

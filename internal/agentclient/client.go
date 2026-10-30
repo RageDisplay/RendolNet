@@ -120,6 +120,16 @@ func (c *Client) Links(ctx context.Context) ([]agent.Link, error) {
 	return l, c.do(ctx, http.MethodGet, "/v1/links", nil, &l)
 }
 
+func (c *Client) WireGuard(ctx context.Context) ([]agent.WireGuardStatus, error) {
+	var devices []agent.WireGuardStatus
+	return devices, c.do(ctx, http.MethodGet, "/v1/wireguard", nil, &devices)
+}
+
+func (c *Client) WireGuardKeypair(ctx context.Context) (*agent.WireGuardKeypair, error) {
+	var keypair agent.WireGuardKeypair
+	return &keypair, c.do(ctx, http.MethodPost, "/v1/wireguard/keypair", nil, &keypair)
+}
+
 // Diag передаёт запрос диагностики агенту как есть.
 func (c *Client) Diag(ctx context.Context, method, name string, in any) (json.RawMessage, error) {
 	var out json.RawMessage

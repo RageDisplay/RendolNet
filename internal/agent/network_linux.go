@@ -57,6 +57,9 @@ func (n *LinuxNetwork) Apply(ctx context.Context, c *netcfg.Config) error {
 	if err := n.syncVLANs(c); err != nil {
 		errs = append(errs, err)
 	}
+	if err := n.syncWireGuard(c); err != nil {
+		errs = append(errs, err)
+	}
 	for _, it := range c.Interfaces {
 		if it.Role == netcfg.RoleMgmt {
 			continue // адресом управления владеет ОС, см. docs/network.md

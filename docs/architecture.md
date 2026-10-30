@@ -11,7 +11,7 @@
                 │        │ SQL                    │ HTTP по /run/rendolnet/agent.sock│
                 │        ▼                        ▼                                 │
                 │  Postgres (под)          rendol-agent (DaemonSet, privileged)     │
-                │                            netlink: адреса, VLAN, маршруты, DHCP  │
+                │                       netlink/wgctrl: адреса, VLAN, WG, маршруты │
                 │                            eBPF: XDP + TC на каждом порту          │
                 │                                 ▲                                 │
                 │  rendol-zapret (DaemonSet) ─────┘ читает конфиг, держит nfqws     │

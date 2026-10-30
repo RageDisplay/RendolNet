@@ -1,6 +1,7 @@
 package netcfg
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net"
 	"net/netip"
@@ -112,6 +113,9 @@ func Validate(c *Config) error {
 			if it.VLAN.Parent == "" {
 				v.add(p+".vlan.parent", "не указан родительский интерфейс")
 			}
+		}
+		if it.WireGuard != nil {
+			validateWireGuard(v, p+".wireguard", it)
 		}
 	}
 	for i := range c.Interfaces {
@@ -344,6 +348,77 @@ func Validate(c *Config) error {
 		return &ValidationError{Errors: v.errs}
 	}
 	return nil
+}
+
+func validateWireGuard(v *validator, p string, it *Interface) {
+	wg := it.WireGuard
+	if it.Role == RoleMgmt || it.DHCP || it.VLAN != nil || it.DHCPServer != nil {
+		v.add(p, "WireGuard несовместим с ролью mgmt, DHCP, VLAN и DHCP-сервером")
+	}
+	if wg.ListenPort < 1 || wg.ListenPort > 65535 {
+		v.add(p+".listen_port", "UDP-порт вне диапазона 1–65535")
+	}
+	if !wireGuardKeyOK(wg.PrivateKey) {
+		v.add(p+".private_key", "ожидается приватный ключ WireGuard в base64")
+	}
+	type peerPrefix struct {
+		peer int
+		path string
+		pfx  netip.Prefix
+	}
+	var prefixes []peerPrefix
+	keys, names := map[string]bool{}, map[string]bool{}
+	for i, peer := range wg.Peers {
+		pp := fmt.Sprintf("%s.peers[%d]", p, i)
+		if !nameRe.MatchString(peer.Name) {
+			v.add(pp+".name", "недопустимое имя peer %q", peer.Name)
+		} else if names[peer.Name] {
+			v.add(pp+".name", "имя peer %q повторяется", peer.Name)
+		}
+		names[peer.Name] = true
+		if !wireGuardKeyOK(peer.PublicKey) {
+			v.add(pp+".public_key", "ожидается публичный ключ WireGuard в base64")
+		} else if keys[peer.PublicKey] {
+			v.add(pp+".public_key", "публичный ключ повторяется")
+		}
+		keys[peer.PublicKey] = true
+		if peer.PresharedKey != "" && !wireGuardKeyOK(peer.PresharedKey) {
+			v.add(pp+".preshared_key", "ожидается preshared key WireGuard в base64")
+		}
+		if len(peer.AllowedIPs) == 0 {
+			v.add(pp+".allowed_ips", "нужен хотя бы один AllowedIPs")
+		}
+		for j, s := range peer.AllowedIPs {
+			path := fmt.Sprintf("%s.allowed_ips[%d]", pp, j)
+			pfx, err := netip.ParsePrefix(s)
+			if err != nil {
+				v.add(path, "ожидается сеть с маской, например 10.0.0.2/32")
+				continue
+			}
+			for _, prev := range prefixes {
+				if prev.peer != i && prev.pfx.Overlaps(pfx) {
+					v.add(path, "AllowedIPs пересекается с %s другого peer", prev.path)
+				}
+			}
+			prefixes = append(prefixes, peerPrefix{peer: i, path: path, pfx: pfx})
+		}
+		if peer.Endpoint != "" {
+			host, port, err := net.SplitHostPort(peer.Endpoint)
+			if err != nil || host == "" {
+				v.add(pp+".endpoint", "ожидается host:port, для IPv6 — [addr]:port")
+			} else if _, err := parsePort(port); err != nil {
+				v.add(pp+".endpoint", "%v", err)
+			}
+		}
+		if peer.PersistentKeepalive < 0 || peer.PersistentKeepalive > 65535 {
+			v.add(pp+".persistent_keepalive", "интервал вне диапазона 0–65535 секунд")
+		}
+	}
+}
+
+func wireGuardKeyOK(s string) bool {
+	b, err := base64.StdEncoding.DecodeString(s)
+	return err == nil && len(b) == 32
 }
 
 // DHCPPrefix — сеть, которую обслуживает DHCP-сервер интерфейса: первый

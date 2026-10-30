@@ -69,6 +69,22 @@ func (a *Agent) Handler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, links)
 	})
+	mux.HandleFunc("GET /v1/wireguard", func(w http.ResponseWriter, r *http.Request) {
+		devices, err := a.net.WireGuard()
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, devices)
+	})
+	mux.HandleFunc("POST /v1/wireguard/keypair", func(w http.ResponseWriter, r *http.Request) {
+		keypair, err := generateWireGuardKeypair()
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, keypair)
+	})
 	mux.HandleFunc("GET /v1/sessions", func(w http.ResponseWriter, r *http.Request) {
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 		if limit <= 0 || limit > 50000 {

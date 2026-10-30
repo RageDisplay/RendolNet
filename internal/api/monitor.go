@@ -199,6 +199,24 @@ func (s *Server) handleLinks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, links)
 }
 
+func (s *Server) handleWireGuard(w http.ResponseWriter, r *http.Request) {
+	devices, err := s.agent.WireGuard(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, devices)
+}
+
+func (s *Server) handleWireGuardKeypair(w http.ResponseWriter, r *http.Request) {
+	keypair, err := s.agent.WireGuardKeypair(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, keypair)
+}
+
 func (s *Server) handleDiag(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	var in any
